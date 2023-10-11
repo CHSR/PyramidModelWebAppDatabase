@@ -9,10 +9,12 @@ GO
 -- for a specific set of programs
 -- =============================================
 CREATE PROC [dbo].[spGetAllFileUploads]
-	@ProgramFKs VARCHAR(MAX) = NULL,
-	@HubFK INT = NULL,
-	@StateFK INT = NULL,
-	@CohortFKs VARCHAR(MAX) = NULL
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@RoleFK INT = NULL,
+	@Username VARCHAR(256) = NULL
 AS
 BEGIN
 	-- SET NOCOUNT ON added to prevent extra result sets from
@@ -28,7 +30,7 @@ BEGIN
 		FileEditor VARCHAR(256) NULL,
 		FileEditDate DATETIME NULL,
 		FileType VARCHAR(50) NULL,
-		FileName VARCHAR(300) NULL,
+		[FileName] VARCHAR(300) NULL,
 		FilePath VARCHAR(1000) NULL,
 		ProgramFK INT NULL,
 		HubFK INT NULL,
@@ -36,7 +38,8 @@ BEGIN
 		CohortFK INT NULL,
 		TypeCodeFK INT NULL,
 		TypeDescription VARCHAR(250) NULL,
-		FileUploadedBy VARCHAR(MAX) NULL
+		FileUploadedBy VARCHAR(MAX) NULL,
+		RolesAuthorizedToModify VARCHAR(100)
 	)
 
 	--Get the file uploads for the programs
@@ -50,7 +53,7 @@ BEGIN
 	    FileEditor,
 	    FileEditDate,
 	    FileType,
-	    FileName,
+	    [FileName],
 	    FilePath,
 	    ProgramFK,
 		HubFK,
@@ -58,15 +61,22 @@ BEGIN
 		CohortFK,
 	    TypeCodeFK,
 	    TypeDescription,
-		FileUploadedBy
+		FileUploadedBy,
+		RolesAuthorizedToModify
 	)
-	SELECT ufu.UserFileUploadPK, ufu.Creator, ufu.CreateDate, ufu.Description, ufu.DisplayFileName, ufu.Editor, ufu.EditDate,
-		ufu.FileType, ufu.FileName, ufu.FilePath, ufu.ProgramFK, ufu.HubFK, ufu.StateFK, ufu.CohortFK, ufu.TypeCodeFK, 
-		cfut.Description, ufu.UploadedBy
+	SELECT ufu.UserFileUploadPK, ufu.Creator, ufu.CreateDate, ufu.[Description], ufu.DisplayFileName, ufu.Editor, ufu.EditDate,
+		ufu.FileType, ufu.[FileName], ufu.FilePath, ufu.ProgramFK, ufu.HubFK, ufu.StateFK, ufu.CohortFK, ufu.TypeCodeFK, 
+		cfut.[Description], ufu.UploadedBy, cfut.RolesAuthorizedToModify
 	FROM dbo.UserFileUpload ufu
 	INNER JOIN dbo.CodeFileUploadType cfut ON cfut.CodeFileUploadTypePK = ufu.TypeCodeFK
 	INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') ssti ON ufu.ProgramFK = ssti.ListItem
 	WHERE ufu.TypeCodeFK = 3
+	AND EXISTS (SELECT roleList.ListItem FROM dbo.SplitStringToInt(cfut.RolesAuthorizedToModify, ',') roleList WHERE roleList.ListItem = @RoleFK)
+	AND @RoleFK <> 18 --Exclude national roles
+	AND (@RoleFK <> 12 OR ufu.Creator = @Username) --Classroom Coach Data Collector role can only see what they uploaded
+	AND (@RoleFK <> 15 OR ufu.Creator = @Username) --Leadership Coach role can only see what they uploaded
+	AND (@RoleFK <> 16 OR ufu.Creator = @Username) --Master Cadre Member role can only see what they uploaded
+	AND (@RoleFK <> 21 OR ufu.Creator = @Username) --Combined LC and CCDC role can only see what they uploaded
 
 	--Get the file uploads for the hubs
 	INSERT INTO @tblAllUploads
@@ -79,7 +89,7 @@ BEGIN
 	    FileEditor,
 	    FileEditDate,
 	    FileType,
-	    FileName,
+	    [FileName],
 	    FilePath,
 	    ProgramFK,
 		HubFK,
@@ -87,14 +97,22 @@ BEGIN
 		CohortFK,
 	    TypeCodeFK,
 	    TypeDescription,
-		FileUploadedBy
+		FileUploadedBy,
+		RolesAuthorizedToModify
 	)
-	SELECT ufu.UserFileUploadPK, ufu.Creator, ufu.CreateDate, ufu.Description, ufu.DisplayFileName, ufu.Editor, ufu.EditDate,
-		ufu.FileType, ufu.FileName, ufu.FilePath, ufu.ProgramFK, ufu.HubFK, ufu.StateFK, ufu.CohortFK, ufu.TypeCodeFK, 
-		cfut.Description, ufu.UploadedBy
+	SELECT ufu.UserFileUploadPK, ufu.Creator, ufu.CreateDate, ufu.[Description], ufu.DisplayFileName, ufu.Editor, ufu.EditDate,
+		ufu.FileType, ufu.[FileName], ufu.FilePath, ufu.ProgramFK, ufu.HubFK, ufu.StateFK, ufu.CohortFK, ufu.TypeCodeFK, 
+		cfut.[Description], ufu.UploadedBy, cfut.RolesAuthorizedToModify
 	FROM dbo.UserFileUpload ufu
 	INNER JOIN dbo.CodeFileUploadType cfut ON cfut.CodeFileUploadTypePK = ufu.TypeCodeFK
-	WHERE ufu.TypeCodeFK = 2 AND ufu.HubFK = @HubFK
+	INNER JOIN dbo.SplitStringToInt(@HubFKs, ',') ssti ON ufu.HubFK = ssti.ListItem
+	WHERE ufu.TypeCodeFK = 2 
+	AND EXISTS (SELECT roleList.ListItem FROM dbo.SplitStringToInt(cfut.RolesAuthorizedToModify, ',') roleList WHERE roleList.ListItem = @RoleFK)
+	AND @RoleFK <> 18 --Exclude national roles
+	AND (@RoleFK <> 12 OR ufu.Creator = @Username) --Classroom Coach Data Collector role can only see what they uploaded
+	AND (@RoleFK <> 15 OR ufu.Creator = @Username) --Leadership Coach role can only see what they uploaded
+	AND (@RoleFK <> 16 OR ufu.Creator = @Username) --Master Cadre Member role can only see what they uploaded
+	AND (@RoleFK <> 21 OR ufu.Creator = @Username) --Combined LC and CCDC role can only see what they uploaded
 
 	--Get the file uploads for the state
 	INSERT INTO @tblAllUploads
@@ -107,7 +125,7 @@ BEGIN
 	    FileEditor,
 	    FileEditDate,
 	    FileType,
-	    FileName,
+	    [FileName],
 	    FilePath,
 	    ProgramFK,
 		HubFK,
@@ -115,43 +133,22 @@ BEGIN
 		CohortFK,
 	    TypeCodeFK,
 	    TypeDescription,
-		FileUploadedBy
+		FileUploadedBy,
+		RolesAuthorizedToModify
 	)
-	SELECT ufu.UserFileUploadPK, ufu.Creator, ufu.CreateDate, ufu.Description, ufu.DisplayFileName, ufu.Editor, ufu.EditDate,
-		ufu.FileType, ufu.FileName, ufu.FilePath, ufu.ProgramFK, ufu.HubFK, ufu.StateFK, ufu.CohortFK, ufu.TypeCodeFK, 
-		cfut.Description, ufu.UploadedBy
+	SELECT ufu.UserFileUploadPK, ufu.Creator, ufu.CreateDate, ufu.[Description], ufu.DisplayFileName, ufu.Editor, ufu.EditDate,
+		ufu.FileType, ufu.[FileName], ufu.FilePath, ufu.ProgramFK, ufu.HubFK, ufu.StateFK, ufu.CohortFK, ufu.TypeCodeFK, 
+		cfut.[Description], ufu.UploadedBy, cfut.RolesAuthorizedToModify
 	FROM dbo.UserFileUpload ufu
 	INNER JOIN dbo.CodeFileUploadType cfut ON cfut.CodeFileUploadTypePK = ufu.TypeCodeFK
-	WHERE ufu.TypeCodeFK = 1 AND ufu.StateFK = @StateFK
-
-	--Get the file uploads for the cohorts
-	INSERT INTO @tblAllUploads
-	(
-	    UserFileUploadPK,
-	    FileCreator,
-	    FileCreateDate,
-	    FileDescription,
-		DisplayFileName,
-	    FileEditor,
-	    FileEditDate,
-	    FileType,
-	    FileName,
-	    FilePath,
-	    ProgramFK,
-		HubFK,
-		StateFK,
-		CohortFK,
-	    TypeCodeFK,
-	    TypeDescription,
-		FileUploadedBy
-	)
-	SELECT ufu.UserFileUploadPK, ufu.Creator, ufu.CreateDate, ufu.Description, ufu.DisplayFileName, ufu.Editor, ufu.EditDate,
-		ufu.FileType, ufu.FileName, ufu.FilePath, ufu.ProgramFK, ufu.HubFK, ufu.StateFK, ufu.CohortFK, ufu.TypeCodeFK, 
-		cfut.Description, ufu.UploadedBy
-	FROM dbo.UserFileUpload ufu
-	INNER JOIN dbo.CodeFileUploadType cfut ON cfut.CodeFileUploadTypePK = ufu.TypeCodeFK
-	INNER JOIN dbo.SplitStringToInt(@CohortFKs, ',') ssti ON ufu.CohortFK = ssti.ListItem
-	WHERE ufu.TypeCodeFK = 4
+	INNER JOIN dbo.SplitStringToInt(@StateFKs, ',') ssti ON ufu.StateFK = ssti.ListItem
+	WHERE ufu.TypeCodeFK = 1 
+	AND EXISTS (SELECT roleList.ListItem FROM dbo.SplitStringToInt(cfut.RolesAuthorizedToModify, ',') roleList WHERE roleList.ListItem = @RoleFK)
+	AND @RoleFK <> 18 --Exclude national roles
+	AND (@RoleFK <> 12 OR ufu.Creator = @Username) --Classroom Coach Data Collector role can only see what they uploaded
+	AND (@RoleFK <> 15 OR ufu.Creator = @Username) --Leadership Coach role can only see what they uploaded
+	AND (@RoleFK <> 16 OR ufu.Creator = @Username) --Master Cadre Member role can only see what they uploaded
+	AND (@RoleFK <> 21 OR ufu.Creator = @Username) --Combined LC and CCDC role can only see what they uploaded
 
 	SELECT * FROM @tblAllUploads tau
 

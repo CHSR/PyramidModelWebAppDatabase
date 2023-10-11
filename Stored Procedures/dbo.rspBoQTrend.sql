@@ -10,9 +10,12 @@ GO
 -- Edit Reason: Need to format the data differently so that chart works
 -- =============================================
 CREATE PROC [dbo].[rspBOQTrend]
-	@ProgramFKs VARCHAR(MAX) = NULL,
 	@StartDate DATETIME = NULL,
-	@EndDate DATETIME = NULL
+	@EndDate DATETIME = NULL,
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFKs VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL
 AS
 BEGIN
 	-- SET NOCOUNT ON added to prevent extra result sets from
@@ -287,9 +290,20 @@ BEGIN
 		, convert(decimal(5,2), boq.Indicator35 + boq.Indicator36 + boq.Indicator37 + boq.Indicator38 + boq.Indicator39 + boq.Indicator40 + boq.Indicator41) / 7 as MIOAvg--MIO
 		
 	FROM dbo.BenchmarkOfQuality boq
-	INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') ssti ON boq.ProgramFK = ssti.ListItem
 	INNER JOIN Program p on p.ProgramPK = boq.ProgramFK
-	WHERE boq.FormDate BETWEEN @StartDate AND @EndDate
+	LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+		ON programList.ListItem = boq.ProgramFK
+	LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+		ON hubList.ListItem = p.HubFK
+	LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+		ON cohortList.ListItem = p.CohortFK
+	LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+		ON stateList.ListItem = p.StateFK
+	WHERE (programList.ListItem IS NOT NULL OR 
+			hubList.ListItem IS NOT NULL OR 
+			cohortList.ListItem IS NOT NULL OR
+			stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized
+	boq.FormDate BETWEEN @StartDate AND @EndDate
 	ORDER BY boq.FormDate ASC
 
 	--Get the ELT data

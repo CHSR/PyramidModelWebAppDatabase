@@ -1,0 +1,4 @@
+INSERT INTO [dbo].[CodeReportCriteriaDefault] ([CodeReportCriteriaDefaultPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (2, 'SD-NOW', 'Default the start date to now', NULL, 1, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeReportCriteriaDefault] ([CodeReportCriteriaDefaultPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (3, 'ED-NOW', 'Default the end date to now', NULL, 2, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeReportCriteriaDefault] ([CodeReportCriteriaDefaultPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (4, 'PIT-NOW', 'Default the point in time to now', NULL, 3, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeReportCriteriaDefault] ([CodeReportCriteriaDefaultPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (1, 'None', 'No criteria defaults', NULL, 100, '2000-01-01 00:00:00.000')

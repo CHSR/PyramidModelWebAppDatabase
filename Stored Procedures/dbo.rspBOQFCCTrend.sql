@@ -8,9 +8,12 @@ GO
 -- Description:	BOQ FCC Trend Report
 -- =============================================
 CREATE PROC [dbo].[rspBOQFCCTrend]
-	@ProgramFKs VARCHAR(MAX) = NULL,
 	@StartDate DATETIME = NULL,
-	@EndDate DATETIME = NULL
+	@EndDate DATETIME = NULL,
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFKs VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL
 AS
 BEGIN
 	-- SET NOCOUNT ON added to prevent extra result sets from
@@ -292,7 +295,7 @@ BEGIN
 		   + case when boqf.Indicator29 = 99 then 1 else 0 end
 		   + case when boqf.Indicator30 = 99 then 1 else 0 end
 		   + case when boqf.Indicator31 = 99 then 1 else 0 end
-		   + case when boqf.Indicator32 = 99 then 1 else 0 end as PRCBNotInPlace
+		   + case when boqf.Indicator32 = 99 then 1 else 0 end as PRCBNotApplicable
 
 		, CASE WHEN boqf.Indicator27 = 0 THEN 1 ELSE 0 END
 		   + CASE when boqf.Indicator28 = 0 then 1 else 0 end
@@ -327,7 +330,7 @@ BEGIN
 		   + case when boqf.Indicator38 = 99 then 1 else 0 end
 		   + case when boqf.Indicator39 = 99 then 1 else 0 end
 		   + case when boqf.Indicator40 = 99 then 1 else 0 end
-		   + case when boqf.Indicator41 = 99 then 1 else 0 end as PDSPNotInPlace
+		   + case when boqf.Indicator41 = 99 then 1 else 0 end as PDSPNotApplicable
 
 		, case when boqf.Indicator33 = 0 then 1 else 0 end
 		   + case when boqf.Indicator34 = 0 then 1 else 0 END
@@ -369,7 +372,7 @@ BEGIN
 		   + case when boqf.Indicator44 = 99 then 1 else 0 end
 		   + case when boqf.Indicator45 = 99 then 1 else 0 end
 		   + case when boqf.Indicator46 = 99 then 1 else 0 end
-		   + case when boqf.Indicator47 = 99 then 1 else 0 end as MIONotInPlace
+		   + case when boqf.Indicator47 = 99 then 1 else 0 end as MIONotApplicable
 
 		, case when boqf.Indicator42 = 0 then 1 else 0 end
 		   + case when boqf.Indicator43 = 0 then 1 else 0 end
@@ -396,9 +399,22 @@ BEGIN
 					+ CASE WHEN boqf.Indicator45 = 99 THEN 0 ELSE boqf.Indicator45 END + CASE WHEN boqf.Indicator46 = 99 THEN 0 ELSE boqf.Indicator46 END + CASE WHEN boqf.Indicator47 = 99 THEN 0 ELSE boqf.Indicator47 END) / 6 as MIOAvg--MIO
 		
 	FROM dbo.BenchmarkOfQualityFCC boqf
-	INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') ssti ON boqf.ProgramFK = ssti.ListItem
 	INNER JOIN dbo.Program p on p.ProgramPK = boqf.ProgramFK
-	WHERE boqf.FormDate BETWEEN @StartDate AND @EndDate
+	LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+		ON programList.ListItem = boqf.ProgramFK
+	LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+		ON hubList.ListItem = p.HubFK
+	LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+		ON cohortList.ListItem = p.CohortFK
+	LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+		ON stateList.ListItem = p.StateFK
+	WHERE (programList.ListItem IS NOT NULL OR 
+			hubList.ListItem IS NOT NULL OR 
+			cohortList.ListItem IS NOT NULL OR
+			stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized
+	boqf.FormDate BETWEEN @StartDate AND @EndDate AND
+    boqf.VersionNumber = 1 AND 
+	boqf.IsComplete = 1
 	ORDER BY boqf.FormDate ASC
 
 	--Get the EMPI data

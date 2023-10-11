@@ -12,8 +12,11 @@ GO
 CREATE PROC [dbo].[rspBIRCounts]
     @StartDate DATETIME,
     @EndDate DATETIME,
-    @ProgramFKs VARCHAR(MAX),
-    @ClassroomsFKs VARCHAR(MAX)
+    @ClassroomsFKs VARCHAR(8000),
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFks VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL
 AS
 BEGIN
 
@@ -61,13 +64,24 @@ BEGIN
     FROM dbo.BehaviorIncident b
         INNER JOIN dbo.Classroom c
             ON c.ClassroomPK = b.ClassroomFK
-        INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList
-            ON c.ProgramFK = programList.ListItem
+		INNER JOIN dbo.Program p
+			ON p.ProgramPK = c.ProgramFK
         LEFT JOIN dbo.SplitStringToInt(@ClassroomsFKs, ',') classroomList
             ON c.ClassroomPK = classroomList.ListItem
-    WHERE b.IncidentDatetime
-    BETWEEN @StartDate AND @EndDate
-	AND (@ClassroomsFKs IS NULL OR @ClassroomsFKs = '' OR classroomList.ListItem IS NOT NULL); --Optional classroom criteria
+		LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+			ON programList.ListItem = c.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+			ON hubList.ListItem = p.HubFK
+		LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+			ON cohortList.ListItem = p.CohortFK
+		LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+			ON stateList.ListItem = p.StateFK
+	WHERE (programList.ListItem IS NOT NULL OR 
+			hubList.ListItem IS NOT NULL OR 
+			cohortList.ListItem IS NOT NULL OR
+			stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized 
+		b.IncidentDatetime BETWEEN @StartDate AND @EndDate
+		AND (@ClassroomsFKs IS NULL OR @ClassroomsFKs = '' OR classroomList.ListItem IS NOT NULL); --Optional classroom criteria
 
 
     --probelm behaviors

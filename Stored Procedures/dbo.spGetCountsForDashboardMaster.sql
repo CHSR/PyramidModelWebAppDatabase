@@ -10,9 +10,12 @@ GO
 -- =============================================
 CREATE PROC [dbo].[spGetCountsForDashboardMaster] 
 	@PointInTime DATETIME = NULL,
-	@ProgramFKs VARCHAR(MAX) = NULL,
-	@HubFK INT = NULL,
-	@StateFK INT = NULL
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFKs VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL,
+	@RoleFK INT = NULL,
+	@Username VARCHAR(256) = NULL
 AS
 BEGIN
 	-- SET NOCOUNT ON added to prevent extra result sets from
@@ -83,7 +86,8 @@ BEGIN
 	UPDATE @tblFinalSelect 
 	SET BOQFCCCount = (SELECT COUNT(boqfcc.BenchmarkOfQualityFCCPK) BOQFCCCount FROM dbo.BenchmarkOfQualityFCC boqfcc
 						INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') ssti ON boqfcc.ProgramFK = ssti.ListItem
-						WHERE boqfcc.FormDate < @PointInTime AND boqfcc.FormDate >= DATEADD(YEAR, -1, @PointInTime)) 
+						WHERE boqfcc.FormDate < @PointInTime AND boqfcc.FormDate >= DATEADD(YEAR, -1, @PointInTime) AND
+							  boqfcc.IsComplete = 1)
 
 	--Behavior Incidents
 	--Only select incidents in the last year
@@ -112,7 +116,8 @@ BEGIN
 		CohortFK INT NULL,
 		TypeCodeFK INT NULL,
 		TypeDescription VARCHAR(250) NULL,
-		FileUploadedBy VARCHAR(MAX) NULL
+		FileUploadedBy VARCHAR(MAX) NULL,
+		RolesAuthorizedToModify VARCHAR(100) NULL
 	)
 
 	INSERT INTO @tblAllUploads
@@ -133,11 +138,15 @@ BEGIN
 		CohortFK,
 	    TypeCodeFK,
 	    TypeDescription,
-		FileUploadedBy
+		FileUploadedBy,
+		RolesAuthorizedToModify
 	)
 	EXEC dbo.spGetAllFileUploads @ProgramFKs = @ProgramFKs, -- varchar(max)
-	                             @HubFK = @HubFK,     -- varchar(max)
-	                             @StateFK = @StateFK      -- int
+	                             @HubFKs = @HubFKs,     -- varchar(max)
+	                             @StateFKs = @StateFKs,      -- varchar(max)
+								 @CohortFKs = @CohortFKs, -- varchar(max)
+								 @RoleFK = @RoleFK,      -- int
+								 @Username = @Username
 
 	UPDATE @tblFinalSelect SET FileUploadCount = (SELECT COUNT(DISTINCT UserFileUploadPK) FROM @tblAllUploads tau
 												  WHERE tau.FileCreateDate < @PointInTime AND tau.FileCreateDate >= DATEADD(YEAR, -1, @PointInTime))

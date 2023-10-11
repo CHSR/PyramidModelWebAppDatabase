@@ -10,9 +10,12 @@ GO
 -- =============================================
 CREATE PROC [dbo].[rspBOQChange]
 (
-    @ProgramFKs VARCHAR(MAX) = NULL,
     @StartDate DATETIME = NULL,
-    @EndDate DATETIME = NULL
+    @EndDate DATETIME = NULL,
+    @ProgramFKs VARCHAR(8000) = NULL,
+    @HubFKs VARCHAR(8000) = NULL,
+    @CohortFKs VARCHAR(8000) = NULL,
+    @StateFKs VARCHAR(8000) = NULL
 )
 AS
 BEGIN
@@ -541,10 +544,19 @@ BEGIN
     FROM dbo.BenchmarkOfQuality boq
         INNER JOIN dbo.Program p
             ON p.ProgramPK = boq.ProgramFK
-        INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') ssti
-            ON p.ProgramPK = ssti.ListItem
-    WHERE boq.FormDate
-    BETWEEN @StartDate AND @EndDate
+		LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+			ON programList.ListItem = boq.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+			ON hubList.ListItem = p.HubFK
+		LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+			ON cohortList.ListItem = p.CohortFK
+		LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+			ON stateList.ListItem = p.StateFK
+		WHERE (programList.ListItem IS NOT NULL OR 
+				hubList.ListItem IS NOT NULL OR 
+				cohortList.ListItem IS NOT NULL OR
+				stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized 
+    boq.FormDate BETWEEN @StartDate AND @EndDate
     ORDER BY p.ProgramName ASC,
              boq.FormDate DESC;
 
@@ -553,5 +565,4 @@ BEGIN
     WHERE tfir.RowNumber <= 5;
 
 END;
-
 GO

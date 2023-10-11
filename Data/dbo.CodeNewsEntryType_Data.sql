@@ -1,0 +1,5 @@
+INSERT INTO [dbo].[CodeNewsEntryType] ([CodeNewsEntryTypePK], [Description], [EndDate], [OrderBy], [RolesAuthorizedToModify], [StartDate]) VALUES (1, 'Application', NULL, 1, '6,', '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeNewsEntryType] ([CodeNewsEntryTypePK], [Description], [EndDate], [OrderBy], [RolesAuthorizedToModify], [StartDate]) VALUES (2, 'State-wide', NULL, 2, '5,6,7,8,13,17,', '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeNewsEntryType] ([CodeNewsEntryTypePK], [Description], [EndDate], [OrderBy], [RolesAuthorizedToModify], [StartDate]) VALUES (3, 'Hub-wide', NULL, 3, '4,5,6,7,8,11,13,14,17,', '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeNewsEntryType] ([CodeNewsEntryTypePK], [Description], [EndDate], [OrderBy], [RolesAuthorizedToModify], [StartDate]) VALUES (4, 'Program-wide', NULL, 4, '4,5,6,7,8,11,13,14,17,', '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeNewsEntryType] ([CodeNewsEntryTypePK], [Description], [EndDate], [OrderBy], [RolesAuthorizedToModify], [StartDate]) VALUES (5, 'Cohort-wide', NULL, 5, '5,6,7,8,13,17,', '2000-01-01 00:00:00.000')

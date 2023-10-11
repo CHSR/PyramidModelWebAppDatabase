@@ -8,8 +8,11 @@ GO
 -- Description:	This stored procedure returns children who have not had any activity in one year
 -- =============================================
 CREATE PROC [dbo].[rspChildInactivityReport] 
-	@ProgramFKs VARCHAR(max),
-	@PointInTime DATETIME
+	@PointInTime DATETIME,
+	@ProgramFKs VARCHAR(8000),
+	@HubFKs VARCHAR(8000),
+	@CohortFKs VARCHAR(8000),
+	@StateFKs VARCHAR(8000)
 AS
 BEGIN
 
@@ -62,8 +65,19 @@ p.ProgramPK, p.ProgramName, c.BirthDate, cp.EnrollmentDate
 FROM dbo.Child c 
 INNER JOIN dbo.ChildProgram cp ON cp.ChildFK = c.ChildPK
 INNER JOIN dbo.Program p ON p.ProgramPK = cp.ProgramFK
-INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') ssti ON cp.ProgramFK = ssti.ListItem
-WHERE cp.EnrollmentDate <= DATEADD(YEAR, -1, @PointInTime) AND cp.DischargeDate IS NULL
+LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+	ON programList.ListItem = cp.ProgramFK
+LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+	ON hubList.ListItem = p.HubFK
+LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+	ON cohortList.ListItem = p.CohortFK
+LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+	ON stateList.ListItem = p.StateFK
+WHERE (programList.ListItem IS NOT NULL OR 
+		hubList.ListItem IS NOT NULL OR 
+		cohortList.ListItem IS NOT NULL OR
+		stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized
+	cp.EnrollmentDate <= DATEADD(YEAR, -1, @PointInTime) AND cp.DischargeDate IS NULL
 
 INSERT INTO @tblkids
 (
@@ -208,5 +222,4 @@ WHERE rownum = 1 AND DATEADD(YEAR, -1, @PointInTime) > DateOfEvent
 ORDER BY DateOfEvent DESC
 
 END
-
 GO

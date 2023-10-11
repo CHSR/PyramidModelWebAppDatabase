@@ -1,0 +1,8 @@
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (1, 'DECA', 'Devereux Early Childhood Assessment', NULL, 4, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (2, 'TS-GOLD', 'Teaching Strategies GOLD Assessment', NULL, 8, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (3, 'AEPSi', 'Assessment, Evaluation, and Programming System Interactive', NULL, 1, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (4, 'BDI', 'Battelle Developmental Inventory', NULL, 2, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (5, 'PKBS', 'Preschool and Kindergarten Behavior Scales', NULL, 5, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (6, 'PKBS-2', 'Preschool and Kindergarten Behavior Scales Version 2', NULL, 6, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (7, 'BSE', 'Brigance Social Emotional', NULL, 3, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeScreenType] ([CodeScreenTypePK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (8, 'T-CRS', 'Teacher-Child Rating Scale', NULL, 7, '2000-01-01 00:00:00.000')

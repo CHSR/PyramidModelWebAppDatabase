@@ -35,10 +35,10 @@ BEGIN
 	    ObjectDate,
 	    ProgramFK
 	)
-	SELECT ec.EmployeeFK, 'Classroom Assignment - ' + c.ProgramSpecificID, ec.AssignDate, c.ProgramFK 
+	SELECT ec.ProgramEmployeeFK, 'Classroom Assignment - ' + c.ProgramSpecificID, ec.AssignDate, c.ProgramFK 
 	FROM dbo.EmployeeClassroom ec
 	INNER JOIN dbo.Classroom c ON c.ClassroomPK = ec.ClassroomFK
-	WHERE ec.EmployeeFK = @ProgramEmployeePK AND c.ProgramFK = @ProgramFK
+	WHERE ec.ProgramEmployeeFK = @ProgramEmployeePK AND c.ProgramFK = @ProgramFK
 	AND ((ec.AssignDate > ISNULL(@TermDate, ec.AssignDate) OR ec.LeaveDate > ISNULL(@TermDate, ec.LeaveDate))
 	OR (ec.AssignDate < ISNULL(@HireDate, ec.AssignDate) OR ec.LeaveDate < ISNULL(@HireDate, ec.LeaveDate)))
 
@@ -67,9 +67,11 @@ BEGIN
 	    ObjectDate,
 	    ProgramFK
 	)
-	SELECT @ProgramEmployeePK, 'Coaching Log', cl.LogDate, @ProgramFK 
+	SELECT DISTINCT @ProgramEmployeePK, 'Coaching Log', cl.LogDate, @ProgramFK 
 	FROM dbo.CoachingLog cl
-	WHERE (cl.TeacherFK = @ProgramEmployeePK OR cl.CoachFK = @ProgramEmployeePK)
+		LEFT JOIN dbo.CoachingLogCoachees clc
+			ON clc.CoachingLogFK = cl.CoachingLogPK
+	WHERE (clc.CoacheeFK = @ProgramEmployeePK OR cl.CoachFK = @ProgramEmployeePK)
 	AND cl.ProgramFK = @ProgramFK
 	AND (cl.LogDate > ISNULL(@TermDate, cl.LogDate)
 	OR cl.LogDate < ISNULL(@HireDate, cl.LogDate))

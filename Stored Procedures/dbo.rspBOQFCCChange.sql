@@ -9,9 +9,12 @@ GO
 -- =============================================
 CREATE PROC [dbo].[rspBOQFCCChange]
 (
-    @ProgramFKs VARCHAR(MAX) = NULL,
     @StartDate DATETIME = NULL,
-    @EndDate DATETIME = NULL
+    @EndDate DATETIME = NULL,
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFKs VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL
 )
 AS
 BEGIN
@@ -704,12 +707,23 @@ BEGIN
            END AS Indicator47,
            ROW_NUMBER() OVER (PARTITION BY boqf.ProgramFK ORDER BY boqf.FormDate DESC) AS RowNumber
     FROM dbo.BenchmarkOfQualityFCC boqf
-        INNER JOIN dbo.Program p
-            ON p.ProgramPK = boqf.ProgramFK
-        INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') ssti
-            ON p.ProgramPK = ssti.ListItem
-    WHERE boqf.FormDate
-    BETWEEN @StartDate AND @EndDate
+		INNER JOIN dbo.Program p
+			ON p.ProgramPK = boqf.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+			ON programList.ListItem = boqf.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+			ON hubList.ListItem = p.HubFK
+		LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+			ON cohortList.ListItem = p.CohortFK
+		LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+			ON stateList.ListItem = p.StateFK
+	WHERE (programList.ListItem IS NOT NULL OR 
+			hubList.ListItem IS NOT NULL OR 
+			cohortList.ListItem IS NOT NULL OR
+			stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized
+    boqf.FormDate BETWEEN @StartDate AND @EndDate AND
+	boqf.VersionNumber = 1 AND 
+	boqf.IsComplete = 1
     ORDER BY p.ProgramName ASC,
              boqf.FormDate DESC;
 
@@ -718,5 +732,4 @@ BEGIN
     WHERE tfir.RowNumber <= 5;
 
 END;
-
 GO

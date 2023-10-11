@@ -1,0 +1,6 @@
+INSERT INTO [dbo].[CodeGender] ([CodeGenderPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (1, 'M', 'Male', NULL, 3, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeGender] ([CodeGenderPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (2, 'F', 'Female', NULL, 1, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeGender] ([CodeGenderPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (3, 'GN', 'Gender Nonconforming/Transgender', NULL, 2, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeGender] ([CodeGenderPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (4, 'NB', 'Non-binary', NULL, 4, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeGender] ([CodeGenderPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (6, 'PNR', 'Prefer not to report', NULL, 6, '2000-01-01 00:00:00.000')
+INSERT INTO [dbo].[CodeGender] ([CodeGenderPK], [Abbreviation], [Description], [EndDate], [OrderBy], [StartDate]) VALUES (5, 'OTHER', 'Other', NULL, 5, '2000-01-01 00:00:00.000')

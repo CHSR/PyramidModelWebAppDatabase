@@ -9,15 +9,18 @@ GO
 -- Child Demographic Report
 -- =============================================
 CREATE PROC [dbo].[rspChildDemographics]
-	@ProgramFKs VARCHAR(MAX) = NULL,
 	@StartDate DATETIME = NULL,
 	@EndDate DATETIME = NULL,
-	@ClassroomFKs VARCHAR(MAX) = NULL,
-	@RaceFKs VARCHAR(MAX) = NULL,
-	@EthnicityFKs VARCHAR(MAX) = NULL,
-	@GenderFKs VARCHAR(MAX) = NULL,
+	@ClassroomFKs VARCHAR(8000) = NULL,
+	@RaceFKs VARCHAR(8000) = NULL,
+	@EthnicityFKs VARCHAR(8000) = NULL,
+	@GenderFKs VARCHAR(8000) = NULL,
 	@IEP BIT = NULL,
-	@DLL BIT = NULL
+	@DLL BIT = NULL,
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFKs VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL
 AS
 BEGIN
 	-- SET NOCOUNT ON added to prevent extra result sets from
@@ -73,7 +76,6 @@ BEGIN
 		cdr.Description AS DischargeReason,
 		p.ProgramName
 	FROM dbo.ChildProgram cp
-	INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList ON cp.ProgramFK = programList.ListItem
 	INNER JOIN dbo.Program p ON p.ProgramPK = cp.ProgramFK
 	INNER JOIN dbo.Child c ON c.ChildPK = cp.ChildFK
 	INNER JOIN dbo.CodeEthnicity ce ON ce.CodeEthnicityPK = c.EthnicityCodeFK
@@ -83,7 +85,19 @@ BEGIN
 	LEFT JOIN dbo.SplitStringToInt(@RaceFKs, ',') raceList ON c.RaceCodeFK = raceList.ListItem
 	LEFT JOIN dbo.SplitStringToInt(@EthnicityFKs, ',') ethnicityList ON c.EthnicityCodeFK = ethnicityList.ListItem
 	LEFT JOIN dbo.SplitStringToInt(@GenderFKs, ',') genderList ON c.GenderCodeFK = genderList.ListItem
-	WHERE cp.EnrollmentDate <= @EndDate
+	LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+		ON programList.ListItem = cp.ProgramFK
+	LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+		ON hubList.ListItem = p.HubFK
+	LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+		ON cohortList.ListItem = p.CohortFK
+	LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+		ON stateList.ListItem = p.StateFK
+	WHERE (programList.ListItem IS NOT NULL OR 
+			hubList.ListItem IS NOT NULL OR 
+			cohortList.ListItem IS NOT NULL OR
+			stateList.ListItem IS NOT NULL)  --At least one of the options must be utilized
+		AND cp.EnrollmentDate <= @EndDate
 		AND (cp.DischargeDate IS NULL OR cp.DischargeDate >= @StartDate)
 		AND (@IEP IS NULL OR cp.HasIEP = @IEP)
 		AND (@DLL IS NULL OR cp.IsDLL = @DLL)
@@ -101,6 +115,7 @@ BEGIN
 	SELECT tac.ChildPK, cc.ClassroomFK, ROW_NUMBER() OVER (PARTITION BY tac.ChildPK ORDER BY cc.AssignDate DESC) AS RowNum
 	FROM @tblAllChildren tac
 	INNER JOIN dbo.ChildClassroom cc ON cc.ChildFK = tac.ChildPK
+	INNER JOIN dbo.SplitStringToInt(@ClassroomFKs, ',') classroomList ON cc.ClassroomFK = classroomList.ListItem --Inner join because we only use the assignments for filtering by criteria
 	WHERE cc.AssignDate <= @EndDate
 	AND (cc.LeaveDate IS NULL OR cc.LeaveDate >= @StartDate);
 
@@ -120,9 +135,8 @@ BEGIN
            tac.DischargeReason,
            tac.ProgramName
 	FROM @tblAllChildren tac 
-	INNER JOIN @tblClassroomAssignments tca ON tca.ChildPK = tac.ChildPK AND tca.RowNum = 1
-	LEFT JOIN dbo.SplitStringToInt(@ClassroomFKs, ',') classroomList ON tca.ClassroomPK = classroomList.ListItem
-	WHERE (@ClassroomFKs IS NULL OR @ClassroomFKs = '' OR classroomList.ListItem IS NOT NULL) --Optional classroom criteria
+	LEFT JOIN @tblClassroomAssignments tca ON tca.ChildPK = tac.ChildPK AND tca.RowNum = 1
+	WHERE (@ClassroomFKs IS NULL OR @ClassroomFKs = '' OR tca.ClassroomPK IS NOT NULL) --Optional classroom criteria
 	ORDER BY tac.ProgramSpecificID ASC;
 
 END

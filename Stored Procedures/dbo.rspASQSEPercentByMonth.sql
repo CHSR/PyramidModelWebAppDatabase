@@ -9,10 +9,13 @@ GO
 -- ASQSE Percent by Month Report
 -- =============================================
 CREATE PROC [dbo].[rspASQSEPercentByMonth]
-	@ProgramFKs VARCHAR(MAX) = NULL,
-	@ClassroomFKs VARCHAR(MAX) = NULL,
+	@ClassroomFKs VARCHAR(8000) = NULL,
 	@StartDate DATETIME = NULL,
-	@EndDate DATETIME = NULL
+	@EndDate DATETIME = NULL,
+	@ProgramFKs VARCHAR(8000) = NULL,
+	@HubFKs VARCHAR(8000) = NULL,
+	@CohortFKs VARCHAR(8000) = NULL,
+	@StateFKs VARCHAR(8000) = NULL
 AS
 BEGIN
 	-- SET NOCOUNT ON added to prevent extra result sets from
@@ -70,22 +73,22 @@ BEGIN
 	--To hold the number of forms by interval
 	DECLARE @tblIntervalFormCounts TABLE (
 		IntervalMonth INT NOT NULL,
-		IntervalDescription VARCHAR(250),
+		IntervalDescription VARCHAR(250) NOT NULL,
 		NumIntervalForms INT NOT NULL
 	)
 
 	--To hold the number of forms by score type
 	DECLARE @tblIntervalScoreTypeFormCounts TABLE (
 		IntervalMonth INT NOT NULL,
-		IntervalDescription VARCHAR(250),
-		ScoreType VARCHAR(50),
+		IntervalDescription VARCHAR(250) NOT NULL,
+		ScoreType VARCHAR(50) NOT NULL,
 		NumIntervalScoreTypeForms INT NOT NULL
 	)
 
 	--To hold the final select info
 	DECLARE @tblFinalSelect TABLE (
 		IntervalMonth INT NOT NULL,
-		IntervalDescription VARCHAR(250),
+		IntervalDescription VARCHAR(250) NOT NULL,
 		ScoreType VARCHAR(50) NOT NULL,
 		NumIntervalForms INT NULL,
 		NumIntervalScoreTypeForms INT NULL,
@@ -111,8 +114,21 @@ BEGIN
 	SELECT a.ASQSEPK, a.FormDate, a.HasDemographicInfoSheet, a.HasPhysicianInfoLetter, a.TotalScore, 
 		a.ChildFK, a.IntervalCodeFK, a.ProgramFK, a.Version 
 	FROM dbo.ASQSE a
-	INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList ON a.ProgramFK = programList.ListItem
-	WHERE a.FormDate BETWEEN @StartDate AND @EndDate
+		INNER JOIN dbo.Program p
+			ON p.ProgramPK = a.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+			ON programList.ListItem = a.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+			ON hubList.ListItem = p.HubFK
+		LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+			ON cohortList.ListItem = p.CohortFK
+		LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+			ON stateList.ListItem = p.StateFK
+	WHERE (programList.ListItem IS NOT NULL OR 
+			hubList.ListItem IS NOT NULL OR 
+			cohortList.ListItem IS NOT NULL OR
+			stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized 
+		a.FormDate BETWEEN @StartDate AND @EndDate
 
 	--Get the score types and codes
 	INSERT INTO @tblScoreTypes
@@ -133,6 +149,7 @@ BEGIN
 	SELECT tc.ChildFK, cc.ClassroomFK, ROW_NUMBER() OVER (PARTITION BY tc.ChildFK ORDER BY cc.AssignDate DESC) AS RowNum
 	FROM @tblCohort tc
 	INNER JOIN dbo.ChildClassroom cc ON cc.ChildFK = tc.ChildFK
+	INNER JOIN dbo.SplitStringToInt(@ClassroomFKs, ',') classroomList ON cc.ClassroomFK = classroomList.ListItem --Inner join because we only use the assignments for filtering by criteria
 	WHERE cc.AssignDate <= @EndDate
 	AND (cc.LeaveDate IS NULL OR cc.LeaveDate >= @StartDate);
 
@@ -156,10 +173,9 @@ BEGIN
 			 WHEN tc.TotalScore BETWEEN sa.MonitoringScoreStart AND sa.MonitoringScoreEnd THEN 2 
 			 ELSE 1 END
 	FROM @tblCohort tc
-	INNER JOIN @tblClassroomAssignments tca ON tca.ChildPK = tc.ChildFK AND tca.RowNum = 1
 	INNER JOIN dbo.ScoreASQSE sa ON tc.IntervalCodeFK = sa.IntervalCodeFK
-	LEFT JOIN dbo.SplitStringToInt(@ClassroomFKs, ',') classroomList ON tca.ClassroomPK = classroomList.ListItem
-	WHERE (@ClassroomFKs IS NULL OR @ClassroomFKs = '' OR classroomList.ListItem IS NOT NULL); --Optional classroom criteria
+	LEFT JOIN @tblClassroomAssignments tca ON tca.ChildPK = tc.ChildFK AND tca.RowNum = 1
+	WHERE (@ClassroomFKs IS NULL OR @ClassroomFKs = '' OR tca.ClassroomPK IS NOT NULL); --Optional classroom criteria
 
 	--Get the first form date, last form date, and count of forms
 	INSERT INTO @tblFormDatesAndCount
@@ -224,7 +240,7 @@ BEGIN
 	WHERE IntervalMonth IS NOT NULL
 
 	--Update the final select table with the percentage
-	UPDATE @tblFinalSelect SET PercentForIntervalScoreType = CONVERT(DECIMAL(5, 2), NumIntervalScoreTypeForms) / NULLIF(NumIntervalForms, 0)
+	UPDATE @tblFinalSelect SET PercentForIntervalScoreType = CONVERT(DECIMAL(15, 2), NumIntervalScoreTypeForms) / NULLIF(NumIntervalForms, 0)
 	WHERE IntervalMonth IS NOT NULL
 	
 	--Final select

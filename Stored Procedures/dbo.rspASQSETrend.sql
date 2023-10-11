@@ -9,10 +9,13 @@ GO
 -- ASQSE Trend report
 -- =============================================
 CREATE PROC [dbo].[rspASQSETrend]
-	@ProgramFKs VARCHAR(MAX) = NULL,
-	@ChildFKs VARCHAR(MAX) = NULL,
+	@ChildFKs VARCHAR(8000) = NULL,
 	@StartDate DATETIME = NULL,
-	@EndDate DATETIME = NULL
+	@EndDate DATETIME = NULL,
+    @ProgramFKs VARCHAR(8000),
+    @HubFKs VARCHAR(8000),
+    @CohortFKs VARCHAR(8000),
+    @StateFKs VARCHAR(8000)
 AS
 BEGIN
 	-- SET NOCOUNT ON added to prevent extra result sets from
@@ -61,11 +64,22 @@ BEGIN
 	SELECT DISTINCT c.ChildPK, cp.ProgramSpecificID, c.FirstName, 
 		c.LastName, cp.ProgramFK, p.ProgramName
 	FROM dbo.Child c
-	INNER JOIN dbo.ChildProgram cp ON cp.ChildFK = c.ChildPK
-	INNER JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList ON cp.ProgramFK = programList.ListItem
-	INNER JOIN dbo.Program p ON p.ProgramPK = cp.ProgramFK
-	LEFT JOIN dbo.SplitStringToInt(@ChildFKs, ',') childList ON c.ChildPK = childList.ListItem
-	WHERE cp.EnrollmentDate <= @EndDate 
+		INNER JOIN dbo.ChildProgram cp ON cp.ChildFK = c.ChildPK
+		INNER JOIN dbo.Program p ON p.ProgramPK = cp.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@ChildFKs, ',') childList ON c.ChildPK = childList.ListItem
+		LEFT JOIN dbo.SplitStringToInt(@ProgramFKs, ',') programList 
+			ON programList.ListItem = cp.ProgramFK
+		LEFT JOIN dbo.SplitStringToInt(@HubFKs, ',') hubList 
+			ON hubList.ListItem = p.HubFK
+		LEFT JOIN dbo.SplitStringToInt(@CohortFKs, ',') cohortList 
+			ON cohortList.ListItem = p.CohortFK
+		LEFT JOIN dbo.SplitStringToInt(@StateFKs, ',') stateList 
+			ON stateList.ListItem = p.StateFK
+	WHERE (programList.ListItem IS NOT NULL OR 
+			hubList.ListItem IS NOT NULL OR 
+			cohortList.ListItem IS NOT NULL OR
+			stateList.ListItem IS NOT NULL) AND  --At least one of the options must be utilized 
+		cp.EnrollmentDate <= @EndDate 
 		AND (cp.DischargeDate IS NULL OR cp.DischargeDate >= @StartDate)
 		AND (@ChildFKs IS NULL OR @ChildFKs = '' OR childList.ListItem IS NOT NULL); --Optional child criteria
 

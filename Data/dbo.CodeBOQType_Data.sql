@@ -1,0 +1,5 @@
+INSERT INTO [dbo].[CodeBOQType] ([CodeBOQTypePK], [Abbreviation], [Description], [OrderBy]) VALUES (1, 'BOQ', 'Benchmarks of Quality 2.0', 1)
+INSERT INTO [dbo].[CodeBOQType] ([CodeBOQTypePK], [Abbreviation], [Description], [OrderBy]) VALUES (2, 'BOQFCC', 'Benchmarks of Quality FCC', 2)
+INSERT INTO [dbo].[CodeBOQType] ([CodeBOQTypePK], [Abbreviation], [Description], [OrderBy]) VALUES (3, 'BOQCWLT', 'Community-Wide Benchmarks of Quality', 3)
+INSERT INTO [dbo].[CodeBOQType] ([CodeBOQTypePK], [Abbreviation], [Description], [OrderBy]) VALUES (4, 'BOQSLT', 'State Leadership Team Benchmarks of Quality', 4)
+INSERT INTO [dbo].[CodeBOQType] ([CodeBOQTypePK], [Abbreviation], [Description], [OrderBy]) VALUES (5, 'BOQFCCV2', 'Benchmarks of Quality FCC Version 2', 5)
