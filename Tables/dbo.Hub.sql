@@ -30,35 +30,68 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.HubPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.HubChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        HubPK,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        Name,
+        StateFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.HubPK,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.Name,
+        d.StateFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		HubPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        HubChangedPK INT NOT NULL,
+        HubPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    HubPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.HubPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.HubChanged ac
-	GROUP BY ac.HubPK
-	HAVING COUNT(ac.HubPK) > 5
+    --Get the existing change rows for affected hubs
+    INSERT INTO @ExistingChangeRows
+    (
+        HubChangedPK,
+		HubPK,
+        RowNumber
+    )
+    SELECT cc.HubChangedPK,
+		   cc.HubPK,
+           ROW_NUMBER() OVER (PARTITION BY cc.HubPK
+                              ORDER BY cc.HubChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.HubChanged cc
+    WHERE EXISTS
+    (
+        SELECT d.HubPK FROM Deleted d WHERE d.HubPK = cc.HubPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.HubChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.HubPK = ecr.HubPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.HubPK = ecr.HubPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected hub
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE cc
+    FROM dbo.HubChanged cc
+        INNER JOIN @ExistingChangeRows ecr
+            ON cc.HubChangedPK = ecr.HubChangedPK
+    WHERE cc.HubChangedPK = ecr.HubChangedPK;
 	
 END
 GO

@@ -18,6 +18,71 @@ CREATE TABLE [dbo].[UserFileUpload]
 [UploadedBy] [varchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
 ) ON [PRIMARY]
 GO
+SET QUOTED_IDENTIFIER ON
+GO
+SET ANSI_NULLS ON
+GO
+-- =============================================
+-- Author:		Benjamin Simmons
+-- Create date: 09/29/2020
+-- Description:	This trigger will update the related 'Changed' table
+-- in order to provide a history of deletions.
+-- =============================================
+CREATE TRIGGER [dbo].[TGR_UserFileUpload_Changed]
+ON [dbo].[UserFileUpload]
+AFTER DELETE
+AS
+BEGIN
+    -- SET NOCOUNT ON added to prevent extra result sets from
+    -- interfering with SELECT statements.
+    SET NOCOUNT ON;
+
+    --Insert the deleted rows
+    INSERT INTO dbo.UserFileUploadChanged
+    (
+        ChangeDatetime,
+        ChangeType,
+        Deleter,
+		UserFileUploadPK,
+        Creator,
+        CreateDate,
+        Description,
+        DisplayFileName,
+        Editor,
+        EditDate,
+        FileType,
+        FileName,
+        FilePath,
+        CohortFK,
+        HubFK,
+        ProgramFK,
+        StateFK,
+        TypeCodeFK,
+        UploadedBy
+    )
+    SELECT GETDATE(),
+           'Delete',
+           NULL, --Can't get the deleter yet
+           d.UserFileUploadPK,
+           d.Creator,
+           d.CreateDate,
+           d.Description,
+           d.DisplayFileName,
+           d.Editor,
+           d.EditDate,
+           d.FileType,
+           d.FileName,
+           d.FilePath,
+           d.CohortFK,
+           d.HubFK,
+           d.ProgramFK,
+           d.StateFK,
+           d.TypeCodeFK,
+           d.UploadedBy
+    FROM Deleted d;
+
+END;
+GO
 ALTER TABLE [dbo].[UserFileUpload] ADD CONSTRAINT [PK_UserFileUpload] PRIMARY KEY CLUSTERED  ([UserFileUploadPK]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[UserFileUpload] ADD CONSTRAINT [FK_UserFileUpload_CodeFileUploadType] FOREIGN KEY ([TypeCodeFK]) REFERENCES [dbo].[CodeFileUploadType] ([CodeFileUploadTypePK])

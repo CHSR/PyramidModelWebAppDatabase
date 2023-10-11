@@ -23,6 +23,7 @@ CREATE TABLE [dbo].[CoachingLog]
 [MEETReflectiveConversation] [bit] NOT NULL,
 [MEETRoleplay] [bit] NOT NULL,
 [MEETVideo] [bit] NOT NULL,
+[Narrative] [varchar] (5000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [OBSConductTPITOS] [bit] NOT NULL,
 [OBSConductTPOT] [bit] NOT NULL,
 [OBSEnvironment] [bit] NOT NULL,
@@ -36,7 +37,6 @@ CREATE TABLE [dbo].[CoachingLog]
 [OBSSideBySide] [bit] NOT NULL,
 [OBSVerbalSupport] [bit] NOT NULL,
 [CoachFK] [int] NOT NULL,
-[TeacherFK] [int] NOT NULL,
 [ProgramFK] [int] NOT NULL
 ) ON [PRIMARY]
 GO
@@ -61,43 +61,138 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.CoachingLogPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.CoachingLogChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        CoachingLogPK,
+        Creator,
+        CreateDate,
+        LogDate,
+        DurationMinutes,
+        Editor,
+        EditDate,
+        FUEmail,
+        FUInPerson,
+        FUNone,
+        FUPhone,
+        MEETDemonstration,
+        MEETEnvironment,
+        MEETGoalSetting,
+        MEETGraphic,
+        MEETMaterial,
+        MEETOther,
+        MEETOtherSpecify,
+        MEETPerformance,
+        MEETProblemSolving,
+        MEETReflectiveConversation,
+        MEETRoleplay,
+        MEETVideo,
+		Narrative,
+        OBSConductTPITOS,
+        OBSConductTPOT,
+        OBSEnvironment,
+        OBSModeling,
+        OBSObserving,
+        OBSOther,
+        OBSOtherHelp,
+        OBSOtherSpecify,
+        OBSProblemSolving,
+        OBSReflectiveConversation,
+        OBSSideBySide,
+        OBSVerbalSupport,
+        CoachFK,
+        ProgramFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.CoachingLogPK,
+        d.Creator,
+        d.CreateDate,
+        d.LogDate,
+        d.DurationMinutes,
+        d.Editor,
+        d.EditDate,
+        d.FUEmail,
+        d.FUInPerson,
+        d.FUNone,
+        d.FUPhone,
+        d.MEETDemonstration,
+        d.MEETEnvironment,
+        d.MEETGoalSetting,
+        d.MEETGraphic,
+        d.MEETMaterial,
+        d.MEETOther,
+        d.MEETOtherSpecify,
+        d.MEETPerformance,
+        d.MEETProblemSolving,
+        d.MEETReflectiveConversation,
+        d.MEETRoleplay,
+        d.MEETVideo,
+		d.Narrative,
+        d.OBSConductTPITOS,
+        d.OBSConductTPOT,
+        d.OBSEnvironment,
+        d.OBSModeling,
+        d.OBSObserving,
+        d.OBSOther,
+        d.OBSOtherHelp,
+        d.OBSOtherSpecify,
+        d.OBSProblemSolving,
+        d.OBSReflectiveConversation,
+        d.OBSSideBySide,
+        d.OBSVerbalSupport,
+        d.CoachFK,
+        d.ProgramFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		CoachingLogPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        CoachingLogChangedPK INT NOT NULL,
+        CoachingLogPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    CoachingLogPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.CoachingLogPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.CoachingLogChanged ac
-	GROUP BY ac.CoachingLogPK
-	HAVING COUNT(ac.CoachingLogPK) > 5
+    --Get the existing change rows for affected coaching logs
+    INSERT INTO @ExistingChangeRows
+    (
+        CoachingLogChangedPK,
+		CoachingLogPK,
+        RowNumber
+    )
+    SELECT cc.CoachingLogChangedPK,
+		   cc.CoachingLogPK,
+           ROW_NUMBER() OVER (PARTITION BY cc.CoachingLogPK
+                              ORDER BY cc.CoachingLogChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.CoachingLogChanged cc
+    WHERE EXISTS
+    (
+        SELECT d.CoachingLogPK FROM Deleted d WHERE d.CoachingLogPK = cc.CoachingLogPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.CoachingLogChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.CoachingLogPK = ecr.CoachingLogPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.CoachingLogPK = ecr.CoachingLogPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected coaching log
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE cc
+    FROM dbo.CoachingLogChanged cc
+        INNER JOIN @ExistingChangeRows ecr
+            ON cc.CoachingLogChangedPK = ecr.CoachingLogChangedPK
+    WHERE cc.CoachingLogChangedPK = ecr.CoachingLogChangedPK;
 	
 END
 GO
-ALTER TABLE [dbo].[CoachingLog] ADD CONSTRAINT [PK_CoachingLog] PRIMARY KEY CLUSTERED  ([CoachingLogPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[CoachingLog] ADD CONSTRAINT [PK_CoachingLog] PRIMARY KEY CLUSTERED ([CoachingLogPK]) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [nci_wi_CoachingLog_A92A5E017E6B5783A0F1189A35F2D0FB] ON [dbo].[CoachingLog] ([ProgramFK], [LogDate]) INCLUDE ([CoachFK], [DurationMinutes]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[CoachingLog] ADD CONSTRAINT [FK_CoachingLog_Coach] FOREIGN KEY ([CoachFK]) REFERENCES [dbo].[ProgramEmployee] ([ProgramEmployeePK])
 GO
 ALTER TABLE [dbo].[CoachingLog] ADD CONSTRAINT [FK_CoachingLog_Program] FOREIGN KEY ([ProgramFK]) REFERENCES [dbo].[Program] ([ProgramPK])
-GO
-ALTER TABLE [dbo].[CoachingLog] ADD CONSTRAINT [FK_CoachingLog_Teacher] FOREIGN KEY ([TeacherFK]) REFERENCES [dbo].[ProgramEmployee] ([ProgramEmployeePK])
 GO

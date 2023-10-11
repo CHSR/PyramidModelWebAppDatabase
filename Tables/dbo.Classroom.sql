@@ -35,41 +35,86 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.ClassroomPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.ClassroomChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        ClassroomPK,
+        BeingServedSubstitute,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        IsInfantToddler,
+        IsPreschool,
+        Location,
+        Name,
+        ProgramSpecificID,
+        ProgramFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.ClassroomPK,
+        d.BeingServedSubstitute,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.IsInfantToddler,
+        d.IsPreschool,
+        d.Location,
+        d.Name,
+        d.ProgramSpecificID,
+        d.ProgramFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		ClassroomPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        ClassroomChangedPK INT NOT NULL,
+        ClassroomPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    ClassroomPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.ClassroomPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.ClassroomChanged ac
-	GROUP BY ac.ClassroomPK
-	HAVING COUNT(ac.ClassroomPK) > 5
+    --Get the existing change rows for affected classrooms
+    INSERT INTO @ExistingChangeRows
+    (
+        ClassroomChangedPK,
+		ClassroomPK,
+        RowNumber
+    )
+    SELECT cc.ClassroomChangedPK,
+		   cc.ClassroomPK,
+           ROW_NUMBER() OVER (PARTITION BY cc.ClassroomPK
+                              ORDER BY cc.ClassroomChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.ClassroomChanged cc
+    WHERE EXISTS
+    (
+        SELECT d.ClassroomPK FROM Deleted d WHERE d.ClassroomPK = cc.ClassroomPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.ClassroomChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.ClassroomPK = ecr.ClassroomPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.ClassroomPK = ecr.ClassroomPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected classroom
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE cc
+    FROM dbo.ClassroomChanged cc
+        INNER JOIN @ExistingChangeRows ecr
+            ON cc.ClassroomChangedPK = ecr.ClassroomChangedPK
+    WHERE cc.ClassroomChangedPK = ecr.ClassroomChangedPK;
 	
 END
 GO
-ALTER TABLE [dbo].[Classroom] ADD CONSTRAINT [PK_Classroom] PRIMARY KEY CLUSTERED  ([ClassroomPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[Classroom] ADD CONSTRAINT [PK_Classroom] PRIMARY KEY CLUSTERED ([ClassroomPK]) ON [PRIMARY]
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_Classroom] ON [dbo].[Classroom] ([ProgramSpecificID], [ProgramFK]) ON [PRIMARY]
+CREATE NONCLUSTERED INDEX [nci_wi_Classroom_95ED841BAD90E909BAB43CD4A5243A73] ON [dbo].[Classroom] ([ProgramFK], [IsPreschool]) INCLUDE ([BeingServedSubstitute], [CreateDate], [Creator], [EditDate], [Editor], [IsInfantToddler], [Location], [Name], [ProgramSpecificID]) ON [PRIMARY]
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [IX_ClassroomUnique] ON [dbo].[Classroom] ([ProgramSpecificID], [ProgramFK]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[Classroom] ADD CONSTRAINT [FK_Classroom_Program] FOREIGN KEY ([ProgramFK]) REFERENCES [dbo].[Program] ([ProgramPK])
 GO

@@ -3,6 +3,7 @@ CREATE TABLE [dbo].[CoachingLogChanged]
 [CoachingLogChangedPK] [int] NOT NULL IDENTITY(1, 1),
 [ChangeDatetime] [datetime] NOT NULL,
 [ChangeType] [varchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Deleter] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CoachingLogPK] [int] NOT NULL,
 [Creator] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [CreateDate] [datetime] NOT NULL,
@@ -26,6 +27,7 @@ CREATE TABLE [dbo].[CoachingLogChanged]
 [MEETReflectiveConversation] [bit] NOT NULL,
 [MEETRoleplay] [bit] NOT NULL,
 [MEETVideo] [bit] NOT NULL,
+[Narrative] [varchar] (5000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [OBSConductTPITOS] [bit] NOT NULL,
 [OBSConductTPOT] [bit] NOT NULL,
 [OBSEnvironment] [bit] NOT NULL,
@@ -39,11 +41,10 @@ CREATE TABLE [dbo].[CoachingLogChanged]
 [OBSSideBySide] [bit] NOT NULL,
 [OBSVerbalSupport] [bit] NOT NULL,
 [CoachFK] [int] NOT NULL,
-[TeacherFK] [int] NOT NULL,
 [ProgramFK] [int] NOT NULL
 ) ON [PRIMARY]
 GO
-ALTER TABLE [dbo].[CoachingLogChanged] ADD CONSTRAINT [PK_CoachingLogChanged] PRIMARY KEY CLUSTERED  ([CoachingLogChangedPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[CoachingLogChanged] ADD CONSTRAINT [PK_CoachingLogChanged] PRIMARY KEY CLUSTERED ([CoachingLogChangedPK]) ON [PRIMARY]
 GO
 CREATE NONCLUSTERED INDEX [IX_CoachingLogChanged_CoachingLogPK_ChangeDatetime] ON [dbo].[CoachingLogChanged] ([CoachingLogPK], [ChangeDatetime] DESC) ON [PRIMARY]
 GO

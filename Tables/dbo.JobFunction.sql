@@ -32,35 +32,72 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.JobFunctionPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.JobFunctionChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        JobFunctionPK,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        StartDate,
+        EndDate,
+        JobTypeCodeFK,
+        ProgramEmployeeFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.JobFunctionPK,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.StartDate,
+        d.EndDate,
+        d.JobTypeCodeFK,
+        d.ProgramEmployeeFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		JobFunctionPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        JobFunctionChangedPK INT NOT NULL,
+        JobFunctionPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    JobFunctionPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.JobFunctionPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.JobFunctionChanged ac
-	GROUP BY ac.JobFunctionPK
-	HAVING COUNT(ac.JobFunctionPK) > 5
+    --Get the existing change rows for affected job functions
+    INSERT INTO @ExistingChangeRows
+    (
+        JobFunctionChangedPK,
+		JobFunctionPK,
+        RowNumber
+    )
+    SELECT cc.JobFunctionChangedPK,
+		   cc.JobFunctionPK,
+           ROW_NUMBER() OVER (PARTITION BY cc.JobFunctionPK
+                              ORDER BY cc.JobFunctionChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.JobFunctionChanged cc
+    WHERE EXISTS
+    (
+        SELECT d.JobFunctionPK FROM Deleted d WHERE d.JobFunctionPK = cc.JobFunctionPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.JobFunctionChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.JobFunctionPK = ecr.JobFunctionPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.JobFunctionPK = ecr.JobFunctionPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected job function
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE cc
+    FROM dbo.JobFunctionChanged cc
+        INNER JOIN @ExistingChangeRows ecr
+            ON cc.JobFunctionChangedPK = ecr.JobFunctionChangedPK
+    WHERE cc.JobFunctionChangedPK = ecr.JobFunctionChangedPK;
 	
 END
 GO

@@ -35,49 +35,114 @@ GO
 -- in order to provide a history of the last 5 actions on this table
 -- record.
 -- =============================================
-CREATE TRIGGER [dbo].[TGR_BehaviorIncident_Changed] 
-   ON  [dbo].[BehaviorIncident] 
-   AFTER UPDATE, DELETE
-AS 
+CREATE TRIGGER [dbo].[TGR_BehaviorIncident_Changed]
+ON [dbo].[BehaviorIncident]
+AFTER UPDATE, DELETE
+AS
 BEGIN
-	-- SET NOCOUNT ON added to prevent extra result sets from
-	-- interfering with SELECT statements.
-	SET NOCOUNT ON;
+    -- SET NOCOUNT ON added to prevent extra result sets from
+    -- interfering with SELECT statements.
+    SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END;
 
-	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
+    --Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.BehaviorIncidentChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        BehaviorIncidentPK,
+        ActivitySpecify,
+        AdminFollowUpSpecify,
+        BehaviorDescription,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        IncidentDatetime,
+        Notes,
+        OthersInvolvedSpecify,
+        PossibleMotivationSpecify,
+        ProblemBehaviorSpecify,
+        StrategyResponseSpecify,
+        ActivityCodeFK,
+        AdminFollowUpCodeFK,
+        OthersInvolvedCodeFK,
+        PossibleMotivationCodeFK,
+        ProblemBehaviorCodeFK,
+        StrategyResponseCodeFK,
+        ChildFK,
+        ClassroomFK
+    )
+    SELECT GETDATE(),
+           @ChangeType,
+           d.BehaviorIncidentPK,
+           d.ActivitySpecify,
+           d.AdminFollowUpSpecify,
+           d.BehaviorDescription,
+           d.Creator,
+           d.CreateDate,
+           d.Editor,
+           d.EditDate,
+           d.IncidentDatetime,
+           d.Notes,
+           d.OthersInvolvedSpecify,
+           d.PossibleMotivationSpecify,
+           d.ProblemBehaviorSpecify,
+           d.StrategyResponseSpecify,
+           d.ActivityCodeFK,
+           d.AdminFollowUpCodeFK,
+           d.OthersInvolvedCodeFK,
+           d.PossibleMotivationCodeFK,
+           d.ProblemBehaviorCodeFK,
+           d.StrategyResponseCodeFK,
+           d.ChildFK,
+           d.ClassroomFK
+    FROM Deleted d;
 
-	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		BehaviorIncidentPK INT,
-		MinChangeDatetime DATETIME
-	)
+    --To hold any existing change rows
+    DECLARE @ExistingChangeRows TABLE
+    (
+        BehaviorIncidentChangedPK INT NOT NULL,
+        BehaviorIncidentPK INT NOT NULL,
+		RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    BehaviorIncidentPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.BehaviorIncidentPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.BehaviorIncidentChanged ac
-	GROUP BY ac.BehaviorIncidentPK
-	HAVING COUNT(ac.BehaviorIncidentPK) > 5
+    --Get the existing change rows for affected behavior incident reports
+    INSERT INTO @ExistingChangeRows
+    (
+		BehaviorIncidentChangedPK,
+        BehaviorIncidentPK,
+        RowNumber
+    )
+    SELECT bic.BehaviorIncidentChangedPK,
+		   bic.BehaviorIncidentPK,
+		   ROW_NUMBER() OVER (PARTITION BY bic.BehaviorIncidentPK
+                              ORDER BY bic.BehaviorIncidentChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.BehaviorIncidentChanged bic
+    WHERE EXISTS
+    (
+        SELECT d.BehaviorIncidentPK FROM Deleted d WHERE d.BehaviorIncidentPK = bic.BehaviorIncidentPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.BehaviorIncidentChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.BehaviorIncidentPK = ecr.BehaviorIncidentPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.BehaviorIncidentPK = ecr.BehaviorIncidentPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+    --Remove all but the most recent 5 change rows for each behavior incident report
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
 	
-END
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE bic
+    FROM dbo.BehaviorIncidentChanged bic
+        INNER JOIN @ExistingChangeRows ecr
+            ON bic.BehaviorIncidentChangedPK = ecr.BehaviorIncidentChangedPK
+    WHERE bic.BehaviorIncidentChangedPK = ecr.BehaviorIncidentChangedPK;
+
+END;
 GO
-ALTER TABLE [dbo].[BehaviorIncident] ADD CONSTRAINT [PK_BehaviorIncident] PRIMARY KEY CLUSTERED  ([BehaviorIncidentPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[BehaviorIncident] ADD CONSTRAINT [PK_BehaviorIncident] PRIMARY KEY CLUSTERED ([BehaviorIncidentPK]) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [nci_wi_BehaviorIncident_F192D94579DB6AAA3BD2D5405B72FFA2] ON [dbo].[BehaviorIncident] ([ClassroomFK], [IncidentDatetime]) INCLUDE ([ChildFK], [CreateDate], [Creator], [ProblemBehaviorCodeFK]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[BehaviorIncident] ADD CONSTRAINT [FK_BehaviorIncident_BehaviorIncident] FOREIGN KEY ([ProblemBehaviorCodeFK]) REFERENCES [dbo].[CodeProblemBehavior] ([CodeProblemBehaviorPK])
 GO

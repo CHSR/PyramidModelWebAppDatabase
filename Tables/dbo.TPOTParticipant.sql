@@ -31,35 +31,70 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.TPOTParticipantPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.TPOTParticipantChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        TPOTParticipantPK,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        ParticipantTypeCodeFK,
+        ProgramEmployeeFK,
+        TPOTFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.TPOTParticipantPK,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.ParticipantTypeCodeFK,
+        d.ProgramEmployeeFK,
+        d.TPOTFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		TPOTParticipantPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        TPOTParticipantChangedPK INT NOT NULL,
+        TPOTParticipantPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    TPOTParticipantPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.TPOTParticipantPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.TPOTParticipantChanged ac
-	GROUP BY ac.TPOTParticipantPK
-	HAVING COUNT(ac.TPOTParticipantPK) > 5
+    --Get the existing change rows for affected participants
+    INSERT INTO @ExistingChangeRows
+    (
+        TPOTParticipantChangedPK,
+		TPOTParticipantPK,
+        RowNumber
+    )
+    SELECT tpc.TPOTParticipantChangedPK,
+		   tpc.TPOTParticipantPK,
+           ROW_NUMBER() OVER (PARTITION BY tpc.TPOTParticipantPK
+                              ORDER BY tpc.TPOTParticipantChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.TPOTParticipantChanged tpc
+    WHERE EXISTS
+    (
+        SELECT d.TPOTParticipantPK FROM Deleted d WHERE d.TPOTParticipantPK = tpc.TPOTParticipantPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.TPOTParticipantChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.TPOTParticipantPK = ecr.TPOTParticipantPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.TPOTParticipantPK = ecr.TPOTParticipantPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected participant
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE tpc
+    FROM dbo.TPOTParticipantChanged tpc
+        INNER JOIN @ExistingChangeRows ecr
+            ON tpc.TPOTParticipantChangedPK = ecr.TPOTParticipantChangedPK
+    WHERE tpc.TPOTParticipantChangedPK = ecr.TPOTParticipantChangedPK;
 	
 END
 GO

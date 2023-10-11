@@ -3,6 +3,7 @@ CREATE TABLE [dbo].[BenchmarkOfQualityFCCChanged]
 [BenchmarkOfQualityFCCChangedPK] [int] NOT NULL IDENTITY(1, 1),
 [ChangeDatetime] [datetime] NOT NULL,
 [ChangeType] [varchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Deleter] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [BenchmarkOfQualityFCCPK] [int] NOT NULL,
 [Creator] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [CreateDate] [datetime] NOT NULL,
@@ -56,11 +57,13 @@ CREATE TABLE [dbo].[BenchmarkOfQualityFCCChanged]
 [Indicator45] [int] NULL,
 [Indicator46] [int] NULL,
 [Indicator47] [int] NULL,
+[IsComplete] [bit] NOT NULL CONSTRAINT [DF_BenchmarkOfQualityFCCChanged_IsComplete] DEFAULT ((1)),
 [TeamMembers] [varchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[VersionNumber] [int] NOT NULL CONSTRAINT [DF_BenchmarkOfQualityFCCChanged_VersionNumber] DEFAULT ((1)),
 [ProgramFK] [int] NOT NULL
 ) ON [PRIMARY]
 GO
-ALTER TABLE [dbo].[BenchmarkOfQualityFCCChanged] ADD CONSTRAINT [PK_BenchmarkOfQualityFCCChanged] PRIMARY KEY CLUSTERED  ([BenchmarkOfQualityFCCChangedPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[BenchmarkOfQualityFCCChanged] ADD CONSTRAINT [PK_BenchmarkOfQualityFCCChanged] PRIMARY KEY CLUSTERED ([BenchmarkOfQualityFCCChangedPK]) ON [PRIMARY]
 GO
 CREATE NONCLUSTERED INDEX [IX_BenchmarkOfQualityFCCChanged_BenchmarkOfQualityFCCPK_ChangeDatetime] ON [dbo].[BenchmarkOfQualityFCCChanged] ([BenchmarkOfQualityFCCPK], [ChangeDatetime] DESC) ON [PRIMARY]
 GO

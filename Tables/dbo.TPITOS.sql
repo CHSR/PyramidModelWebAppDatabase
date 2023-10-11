@@ -7,7 +7,7 @@ CREATE TABLE [dbo].[TPITOS]
 [CreateDate] [datetime] NOT NULL,
 [Editor] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [EditDate] [datetime] NULL,
-[IsValid] [bit] NOT NULL,
+[IsComplete] [bit] NOT NULL,
 [Item1NumNo] [int] NULL,
 [Item1NumYes] [int] NULL,
 [Item2NumNo] [int] NULL,
@@ -71,35 +71,150 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.TPITOSPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.TPITOSChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        TPITOSPK,
+        ClassroomRedFlagsNumPossible,
+        ClassroomRedFlagsNumYes,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        IsComplete,
+        Item1NumNo,
+        Item1NumYes,
+        Item2NumNo,
+        Item2NumYes,
+        Item3NumNo,
+        Item3NumYes,
+        Item4NumNo,
+        Item4NumYes,
+        Item5NumNo,
+        Item5NumYes,
+        Item6NumNo,
+        Item6NumYes,
+        Item7NumNo,
+        Item7NumYes,
+        Item8NumNo,
+        Item8NumYes,
+        Item9NumNo,
+        Item9NumYes,
+        Item10NumNo,
+        Item10NumYes,
+        Item11NumNo,
+        Item11NumYes,
+        Item12NumNo,
+        Item12NumYes,
+        Item13NumNo,
+        Item13NumYes,
+        LeadTeacherRedFlagsNumYes,
+        LeadTeacherRedFlagsNumPossible,
+        Notes,
+        NumAdultsBegin,
+        NumAdultsEnd,
+        NumAdultsEntered,
+        NumKidsBegin,
+        NumKidsEnd,
+        ObservationEndDateTime,
+        ObservationStartDateTime,
+        OtherTeacherRedFlagsNumYes,
+        OtherTeacherRedFlagsNumPossible,
+        ClassroomFK,
+        ObserverFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.TPITOSPK,
+        d.ClassroomRedFlagsNumPossible,
+        d.ClassroomRedFlagsNumYes,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.IsComplete,
+        d.Item1NumNo,
+        d.Item1NumYes,
+        d.Item2NumNo,
+        d.Item2NumYes,
+        d.Item3NumNo,
+        d.Item3NumYes,
+        d.Item4NumNo,
+        d.Item4NumYes,
+        d.Item5NumNo,
+        d.Item5NumYes,
+        d.Item6NumNo,
+        d.Item6NumYes,
+        d.Item7NumNo,
+        d.Item7NumYes,
+        d.Item8NumNo,
+        d.Item8NumYes,
+        d.Item9NumNo,
+        d.Item9NumYes,
+        d.Item10NumNo,
+        d.Item10NumYes,
+        d.Item11NumNo,
+        d.Item11NumYes,
+        d.Item12NumNo,
+        d.Item12NumYes,
+        d.Item13NumNo,
+        d.Item13NumYes,
+        d.LeadTeacherRedFlagsNumYes,
+        d.LeadTeacherRedFlagsNumPossible,
+        d.Notes,
+        d.NumAdultsBegin,
+        d.NumAdultsEnd,
+        d.NumAdultsEntered,
+        d.NumKidsBegin,
+        d.NumKidsEnd,
+        d.ObservationEndDateTime,
+        d.ObservationStartDateTime,
+        d.OtherTeacherRedFlagsNumYes,
+        d.OtherTeacherRedFlagsNumPossible,
+        d.ClassroomFK,
+        d.ObserverFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		TPITOSPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        TPITOSChangedPK INT NOT NULL,
+        TPITOSPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    TPITOSPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.TPITOSPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.TPITOSChanged ac
-	GROUP BY ac.TPITOSPK
-	HAVING COUNT(ac.TPITOSPK) > 5
+    --Get the existing change rows for affected TPITOS
+    INSERT INTO @ExistingChangeRows
+    (
+        TPITOSChangedPK,
+		TPITOSPK,
+        RowNumber
+    )
+    SELECT tc.TPITOSChangedPK,
+		   tc.TPITOSPK,
+           ROW_NUMBER() OVER (PARTITION BY tc.TPITOSPK
+                              ORDER BY tc.TPITOSChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.TPITOSChanged tc
+    WHERE EXISTS
+    (
+        SELECT d.TPITOSPK FROM Deleted d WHERE d.TPITOSPK = tc.TPITOSPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.TPITOSChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.TPITOSPK = ecr.TPITOSPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.TPITOSPK = ecr.TPITOSPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected TPITOS
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE tc
+    FROM dbo.TPITOSChanged tc
+        INNER JOIN @ExistingChangeRows ecr
+            ON tc.TPITOSChangedPK = ecr.TPITOSChangedPK
+    WHERE tc.TPITOSChangedPK = ecr.TPITOSChangedPK;
 	
 END
 GO

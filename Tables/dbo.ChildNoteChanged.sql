@@ -3,6 +3,7 @@ CREATE TABLE [dbo].[ChildNoteChanged]
 [ChildNoteChangedPK] [int] NOT NULL IDENTITY(1, 1),
 [ChangeDatetime] [datetime] NOT NULL,
 [ChangeType] [varchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Deleter] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [ChildNotePK] [int] NOT NULL,
 [Contents] [varchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [Creator] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,

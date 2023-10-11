@@ -11,7 +11,7 @@ CREATE TABLE [dbo].[EmployeeClassroom]
 [ClassroomFK] [int] NOT NULL,
 [JobTypeCodeFK] [int] NOT NULL CONSTRAINT [DF_EmployeeClassroom_JobTypeCodeFK] DEFAULT ((1)),
 [LeaveReasonCodeFK] [int] NULL,
-[EmployeeFK] [int] NOT NULL
+[ProgramEmployeeFK] [int] NOT NULL
 ) ON [PRIMARY]
 GO
 SET QUOTED_IDENTIFIER ON
@@ -35,39 +35,82 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.EmployeeClassroomPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.EmployeeClassroomChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        EmployeeClassroomPK,
+        AssignDate,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        LeaveDate,
+        LeaveReasonSpecify,
+        ClassroomFK,
+        JobTypeCodeFK,
+        LeaveReasonCodeFK,
+        ProgramEmployeeFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.EmployeeClassroomPK,
+        d.AssignDate,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.LeaveDate,
+        d.LeaveReasonSpecify,
+        d.ClassroomFK,
+        d.JobTypeCodeFK,
+        d.LeaveReasonCodeFK,
+        d.ProgramEmployeeFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		EmployeeClassroomPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        EmployeeClassroomChangedPK INT NOT NULL,
+        EmployeeClassroomPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    EmployeeClassroomPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.EmployeeClassroomPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.EmployeeClassroomChanged ac
-	GROUP BY ac.EmployeeClassroomPK
-	HAVING COUNT(ac.EmployeeClassroomPK) > 5
+    --Get the existing change rows for affected employee classroom rows
+    INSERT INTO @ExistingChangeRows
+    (
+        EmployeeClassroomChangedPK,
+		EmployeeClassroomPK,
+        RowNumber
+    )
+    SELECT cc.EmployeeClassroomChangedPK,
+		   cc.EmployeeClassroomPK,
+           ROW_NUMBER() OVER (PARTITION BY cc.EmployeeClassroomPK
+                              ORDER BY cc.EmployeeClassroomChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.EmployeeClassroomChanged cc
+    WHERE EXISTS
+    (
+        SELECT d.EmployeeClassroomPK FROM Deleted d WHERE d.EmployeeClassroomPK = cc.EmployeeClassroomPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.EmployeeClassroomChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.EmployeeClassroomPK = ecr.EmployeeClassroomPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.EmployeeClassroomPK = ecr.EmployeeClassroomPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected employee classroom row
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE cc
+    FROM dbo.EmployeeClassroomChanged cc
+        INNER JOIN @ExistingChangeRows ecr
+            ON cc.EmployeeClassroomChangedPK = ecr.EmployeeClassroomChangedPK
+    WHERE cc.EmployeeClassroomChangedPK = ecr.EmployeeClassroomChangedPK;
 	
 END
 GO
-ALTER TABLE [dbo].[EmployeeClassroom] ADD CONSTRAINT [PK_EmployeeClassroom] PRIMARY KEY CLUSTERED  ([EmployeeClassroomPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[EmployeeClassroom] ADD CONSTRAINT [PK_EmployeeClassroom] PRIMARY KEY CLUSTERED ([EmployeeClassroomPK]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[EmployeeClassroom] ADD CONSTRAINT [FK_EmployeeClassroom_Classroom] FOREIGN KEY ([ClassroomFK]) REFERENCES [dbo].[Classroom] ([ClassroomPK])
 GO
@@ -75,5 +118,5 @@ ALTER TABLE [dbo].[EmployeeClassroom] ADD CONSTRAINT [FK_EmployeeClassroom_CodeE
 GO
 ALTER TABLE [dbo].[EmployeeClassroom] ADD CONSTRAINT [FK_EmployeeClassroom_CodeJobType] FOREIGN KEY ([JobTypeCodeFK]) REFERENCES [dbo].[CodeJobType] ([CodeJobTypePK])
 GO
-ALTER TABLE [dbo].[EmployeeClassroom] ADD CONSTRAINT [FK_EmployeeClassroom_ProgramEmployee] FOREIGN KEY ([EmployeeFK]) REFERENCES [dbo].[ProgramEmployee] ([ProgramEmployeePK])
+ALTER TABLE [dbo].[EmployeeClassroom] ADD CONSTRAINT [FK_EmployeeClassroom_ProgramEmployee] FOREIGN KEY ([ProgramEmployeeFK]) REFERENCES [dbo].[ProgramEmployee] ([ProgramEmployeePK])
 GO

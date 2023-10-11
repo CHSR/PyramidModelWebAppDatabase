@@ -36,13 +36,36 @@ BEGIN
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.CohortChanged
-    SELECT GETDATE(), @ChangeType, d.*
+    (
+        ChangeDatetime,
+        ChangeType,
+        CohortPK,
+        CohortName,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        EndDate,
+        StartDate,
+        StateFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.CohortPK,
+        d.CohortName,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.EndDate,
+        d.StartDate,
+        d.StateFK
 	FROM Deleted d
 
 	--To hold any existing change rows
 	DECLARE @ExistingChangeRows TABLE (
-		CohortPK INT,
-		MinChangeDatetime DATETIME
+		CohortPK INT NOT NULL,
+		MinChangeDatetime DATETIME NOT NULL
 	)
 
 	--Get the existing change rows if there are more than 5
@@ -53,6 +76,7 @@ BEGIN
 	)
 	SELECT ac.CohortPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
 	FROM dbo.CohortChanged ac
+	INNER JOIN Deleted d ON d.CohortPK = ac.CohortPK
 	GROUP BY ac.CohortPK
 	HAVING COUNT(ac.CohortPK) > 5
 

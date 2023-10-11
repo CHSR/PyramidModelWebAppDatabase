@@ -32,35 +32,72 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.ChildNotePK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.ChildNoteChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        ChildNotePK,
+        Contents,
+        Creator,
+        CreateDate,
+        NoteDate,
+        Editor,
+        EditDate,
+        ChildFK,
+        ProgramFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.ChildNotePK,
+        d.Contents,
+        d.Creator,
+        d.CreateDate,
+        d.NoteDate,
+        d.Editor,
+        d.EditDate,
+        d.ChildFK,
+        d.ProgramFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		ChildNotePK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        ChildNoteChangedPK INT NOT NULL,
+        ChildNotePK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    ChildNotePK,
-	    MinChangeDatetime
-	)
-	SELECT ac.ChildNotePK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.ChildNoteChanged ac
-	GROUP BY ac.ChildNotePK
-	HAVING COUNT(ac.ChildNotePK) > 5
+    --Get the existing change rows for affected child notes
+    INSERT INTO @ExistingChangeRows
+    (
+        ChildNoteChangedPK,
+		ChildNotePK,
+        RowNumber
+    )
+    SELECT cc.ChildNoteChangedPK,
+		   cc.ChildNotePK,
+           ROW_NUMBER() OVER (PARTITION BY cc.ChildNotePK
+                              ORDER BY cc.ChildNoteChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.ChildNoteChanged cc
+    WHERE EXISTS
+    (
+        SELECT d.ChildNotePK FROM Deleted d WHERE d.ChildNotePK = cc.ChildNotePK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.ChildNoteChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.ChildNotePK = ecr.ChildNotePK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.ChildNotePK = ecr.ChildNotePK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected child note
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE cc
+    FROM dbo.ChildNoteChanged cc
+        INNER JOIN @ExistingChangeRows ecr
+            ON cc.ChildNoteChangedPK = ecr.ChildNoteChangedPK
+    WHERE cc.ChildNoteChangedPK = ecr.ChildNoteChangedPK;
 	
 END
 GO

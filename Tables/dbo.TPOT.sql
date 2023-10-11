@@ -7,7 +7,7 @@ CREATE TABLE [dbo].[TPOT]
 [CreateDate] [datetime] NOT NULL,
 [Editor] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [EditDate] [datetime] NULL,
-[IsValid] [bit] NOT NULL,
+[IsComplete] [bit] NOT NULL,
 [Item1NumNo] [int] NULL,
 [Item1NumYes] [int] NULL,
 [Item2NumNo] [int] NULL,
@@ -72,39 +72,158 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.TPOTPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.TPOTChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        TPOTPK,
+        AdditionalStrategiesNumUsed,
+        ChallengingBehaviorsNumObserved,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        IsComplete,
+        Item1NumNo,
+        Item1NumYes,
+        Item2NumNo,
+        Item2NumYes,
+        Item3NumNo,
+        Item3NumYes,
+        Item4NumNo,
+        Item4NumYes,
+        Item5NumNo,
+        Item5NumYes,
+        Item6NumNo,
+        Item6NumYes,
+        Item7NumNo,
+        Item7NumYes,
+        Item8NumNo,
+        Item8NumYes,
+        Item9NumNo,
+        Item9NumYes,
+        Item10NumNo,
+        Item10NumYes,
+        Item11NumNo,
+        Item11NumYes,
+        Item12NumNo,
+        Item12NumYes,
+        Item13NumNo,
+        Item13NumYes,
+        Item14NumNo,
+        Item14NumYes,
+        Notes,
+        NumAdultsBegin,
+        NumAdultsEnd,
+        NumAdultsEntered,
+        NumKidsBegin,
+        NumKidsEnd,
+        ObservationEndDateTime,
+        ObservationStartDateTime,
+        RedFlagsNumNo,
+        RedFlagsNumYes,
+        ClassroomFK,
+        EssentialStrategiesUsedCodeFK,
+        ObserverFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.TPOTPK,
+        d.AdditionalStrategiesNumUsed,
+        d.ChallengingBehaviorsNumObserved,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.IsComplete,
+        d.Item1NumNo,
+        d.Item1NumYes,
+        d.Item2NumNo,
+        d.Item2NumYes,
+        d.Item3NumNo,
+        d.Item3NumYes,
+        d.Item4NumNo,
+        d.Item4NumYes,
+        d.Item5NumNo,
+        d.Item5NumYes,
+        d.Item6NumNo,
+        d.Item6NumYes,
+        d.Item7NumNo,
+        d.Item7NumYes,
+        d.Item8NumNo,
+        d.Item8NumYes,
+        d.Item9NumNo,
+        d.Item9NumYes,
+        d.Item10NumNo,
+        d.Item10NumYes,
+        d.Item11NumNo,
+        d.Item11NumYes,
+        d.Item12NumNo,
+        d.Item12NumYes,
+        d.Item13NumNo,
+        d.Item13NumYes,
+        d.Item14NumNo,
+        d.Item14NumYes,
+        d.Notes,
+        d.NumAdultsBegin,
+        d.NumAdultsEnd,
+        d.NumAdultsEntered,
+        d.NumKidsBegin,
+        d.NumKidsEnd,
+        d.ObservationEndDateTime,
+        d.ObservationStartDateTime,
+        d.RedFlagsNumNo,
+        d.RedFlagsNumYes,
+        d.ClassroomFK,
+        d.EssentialStrategiesUsedCodeFK,
+        d.ObserverFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		TPOTPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        TPOTChangedPK INT NOT NULL,
+        TPOTPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    TPOTPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.TPOTPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.TPOTChanged ac
-	GROUP BY ac.TPOTPK
-	HAVING COUNT(ac.TPOTPK) > 5
+    --Get the existing change rows for affected TPOT
+    INSERT INTO @ExistingChangeRows
+    (
+        TPOTChangedPK,
+		TPOTPK,
+        RowNumber
+    )
+    SELECT tc.TPOTChangedPK,
+		   tc.TPOTPK,
+           ROW_NUMBER() OVER (PARTITION BY tc.TPOTPK
+                              ORDER BY tc.TPOTChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.TPOTChanged tc
+    WHERE EXISTS
+    (
+        SELECT d.TPOTPK FROM Deleted d WHERE d.TPOTPK = tc.TPOTPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.TPOTChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.TPOTPK = ecr.TPOTPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.TPOTPK = ecr.TPOTPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected TPOT
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE tc
+    FROM dbo.TPOTChanged tc
+        INNER JOIN @ExistingChangeRows ecr
+            ON tc.TPOTChangedPK = ecr.TPOTChangedPK
+    WHERE tc.TPOTChangedPK = ecr.TPOTChangedPK;
 	
 END
 GO
-ALTER TABLE [dbo].[TPOT] ADD CONSTRAINT [PK_TPOT] PRIMARY KEY CLUSTERED  ([TPOTPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[TPOT] ADD CONSTRAINT [PK_TPOT] PRIMARY KEY CLUSTERED ([TPOTPK]) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [nci_wi_TPOT_055CDF0FE180B3D2E029642133974D4E] ON [dbo].[TPOT] ([ClassroomFK], [ObservationStartDateTime]) INCLUDE ([IsComplete], [ObservationEndDateTime]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[TPOT] ADD CONSTRAINT [FK_TPOT_Classroom] FOREIGN KEY ([ClassroomFK]) REFERENCES [dbo].[Classroom] ([ClassroomPK])
 GO

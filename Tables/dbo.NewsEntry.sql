@@ -34,35 +34,76 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.NewsEntryPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.NewsEntryChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        NewsEntryPK,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        EntryDate,
+        NewsEntryTypeCodeFK,
+        ProgramFK,
+        HubFK,
+        StateFK,
+        CohortFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.NewsEntryPK,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.EntryDate,
+        d.NewsEntryTypeCodeFK,
+        d.ProgramFK,
+        d.HubFK,
+        d.StateFK,
+        d.CohortFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		NewsEntryPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        NewsEntryChangedPK INT NOT NULL,
+        NewsEntryPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    NewsEntryPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.NewsEntryPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.NewsEntryChanged ac
-	GROUP BY ac.NewsEntryPK
-	HAVING COUNT(ac.NewsEntryPK) > 5
+    --Get the existing change rows for affected news entry
+    INSERT INTO @ExistingChangeRows
+    (
+        NewsEntryChangedPK,
+		NewsEntryPK,
+        RowNumber
+    )
+    SELECT nec.NewsEntryChangedPK,
+		   nec.NewsEntryPK,
+           ROW_NUMBER() OVER (PARTITION BY nec.NewsEntryPK
+                              ORDER BY nec.NewsEntryChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.NewsEntryChanged nec
+    WHERE EXISTS
+    (
+        SELECT d.NewsEntryPK FROM Deleted d WHERE d.NewsEntryPK = nec.NewsEntryPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.NewsEntryChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.NewsEntryPK = ecr.NewsEntryPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.NewsEntryPK = ecr.NewsEntryPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected news entry
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE nec
+    FROM dbo.NewsEntryChanged nec
+        INNER JOIN @ExistingChangeRows ecr
+            ON nec.NewsEntryChangedPK = ecr.NewsEntryChangedPK
+    WHERE nec.NewsEntryChangedPK = ecr.NewsEntryChangedPK;
 	
 END
 GO

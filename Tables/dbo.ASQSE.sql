@@ -26,49 +26,96 @@ GO
 -- in order to provide a history of the last 5 actions on this table
 -- record.
 -- =============================================
-CREATE TRIGGER [dbo].[TGR_ASQSE_Changed] 
-   ON  [dbo].[ASQSE] 
-   AFTER UPDATE, DELETE
-AS 
+CREATE TRIGGER [dbo].[TGR_ASQSE_Changed]
+ON [dbo].[ASQSE]
+AFTER UPDATE, DELETE
+AS
 BEGIN
-	-- SET NOCOUNT ON added to prevent extra result sets from
-	-- interfering with SELECT statements.
-	SET NOCOUNT ON;
+    -- SET NOCOUNT ON added to prevent extra result sets from
+    -- interfering with SELECT statements.
+    SET NOCOUNT ON;
 
-	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+    --Get the change type
+    DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.ASQSEPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
-	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
+    --Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.ASQSEChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        ASQSEPK,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        FormDate,
+        HasDemographicInfoSheet,
+        HasPhysicianInfoLetter,
+        TotalScore,
+        ChildFK,
+        IntervalCodeFK,
+        ProgramFK,
+        Version
+    )
+    SELECT GETDATE(),
+           @ChangeType,
+           d.ASQSEPK,
+           d.Creator,
+           d.CreateDate,
+           d.Editor,
+           d.EditDate,
+           d.FormDate,
+           d.HasDemographicInfoSheet,
+           d.HasPhysicianInfoLetter,
+           d.TotalScore,
+           d.ChildFK,
+           d.IntervalCodeFK,
+           d.ProgramFK,
+           d.Version
+    FROM Deleted d;
 
-	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		ASQSEPK INT,
-		MinChangeDatetime DATETIME
-	)
+    --To hold any existing change rows
+    DECLARE @ExistingChangeRows TABLE
+    (
+        ASQSEChangedPK INT NOT NULL,
+		ASQSEPK	INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    ASQSEPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.ASQSEPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.ASQSEChanged ac
-	GROUP BY ac.ASQSEPK
-	HAVING COUNT(ac.ASQSEPK) > 5
+    --Get the existing change rows for affected ASQSEs
+    INSERT INTO @ExistingChangeRows
+    (
+        ASQSEChangedPK,
+		ASQSEPK,
+        RowNumber
+    )
+    SELECT ac.ASQSEChangedPK, 
+		   ac.ASQSEPK,
+           ROW_NUMBER() OVER (PARTITION BY ac.ASQSEPK
+                              ORDER BY ac.ASQSEChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.ASQSEChanged ac
+    WHERE EXISTS
+    (
+        SELECT d.ASQSEPK FROM Deleted d WHERE d.ASQSEPK = ac.ASQSEPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.ASQSEChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.ASQSEPK = ecr.ASQSEPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.ASQSEPK = ecr.ASQSEPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	
-END
+    --Remove all but the most recent 5 change rows for each affected ASQSE
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE ac
+    FROM dbo.ASQSEChanged ac
+        INNER JOIN @ExistingChangeRows ecr
+            ON ac.ASQSEChangedPK = ecr.ASQSEChangedPK
+    WHERE ac.ASQSEChangedPK = ecr.ASQSEChangedPK;
+
+END;
 GO
-ALTER TABLE [dbo].[ASQSE] ADD CONSTRAINT [PK_ASQSE] PRIMARY KEY CLUSTERED  ([ASQSEPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[ASQSE] ADD CONSTRAINT [PK_ASQSE] PRIMARY KEY CLUSTERED ([ASQSEPK]) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [nci_wi_ASQSE_DBAF1E38FFBBD26CFA463ED8018DF7E8] ON [dbo].[ASQSE] ([ProgramFK], [FormDate]) INCLUDE ([ChildFK], [IntervalCodeFK], [TotalScore], [Version]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[ASQSE] ADD CONSTRAINT [FK_ASQSE_Child] FOREIGN KEY ([ChildFK]) REFERENCES [dbo].[Child] ([ChildPK])
 GO

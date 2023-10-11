@@ -32,35 +32,72 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.ChildStatusPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.ChildStatusChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        ChildStatusPK,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+        StatusDate,
+        ChildStatusCodeFK,
+        ChildFK,
+        ProgramFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.ChildStatusPK,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+        d.StatusDate,
+        d.ChildStatusCodeFK,
+        d.ChildFK,
+        d.ProgramFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		ChildStatusPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        ChildStatusChangedPK INT NOT NULL,
+        ChildStatusPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    ChildStatusPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.ChildStatusPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.ChildStatusChanged ac
-	GROUP BY ac.ChildStatusPK
-	HAVING COUNT(ac.ChildStatusPK) > 5
+    --Get the existing change rows for affected child status rows
+    INSERT INTO @ExistingChangeRows
+    (
+        ChildStatusChangedPK,
+		ChildStatusPK,
+        RowNumber
+    )
+    SELECT cc.ChildStatusChangedPK,
+		   cc.ChildStatusPK,
+           ROW_NUMBER() OVER (PARTITION BY cc.ChildStatusPK
+                              ORDER BY cc.ChildStatusChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.ChildStatusChanged cc
+    WHERE EXISTS
+    (
+        SELECT d.ChildStatusPK FROM Deleted d WHERE d.ChildStatusPK = cc.ChildStatusPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.ChildStatusChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.ChildStatusPK = ecr.ChildStatusPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.ChildStatusPK = ecr.ChildStatusPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected child status row
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE cc
+    FROM dbo.ChildStatusChanged cc
+        INNER JOIN @ExistingChangeRows ecr
+            ON cc.ChildStatusChangedPK = ecr.ChildStatusChangedPK
+    WHERE cc.ChildStatusChangedPK = ecr.ChildStatusChangedPK;
 	
 END
 GO

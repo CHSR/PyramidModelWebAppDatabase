@@ -5,6 +5,7 @@ CREATE TABLE [dbo].[Program]
 [CreateDate] [datetime] NOT NULL,
 [Editor] [varchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [EditDate] [datetime] NULL,
+[IDNumber] [varchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Location] [varchar] (400) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [ProgramEndDate] [datetime] NULL,
 [ProgramName] [varchar] (400) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -35,39 +36,84 @@ BEGIN
 	SET NOCOUNT ON;
 
 	--Get the change type
-	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT * FROM Inserted) THEN 'Update' ELSE 'Delete' END
+	DECLARE @ChangeType VARCHAR(100) = CASE WHEN EXISTS (SELECT i.ProgramPK FROM Inserted i) THEN 'Update' ELSE 'Delete' END;
 
 	--Insert the rows that have the original values (if you changed a 4 to a 5, this will insert the row with the 4)
     INSERT INTO dbo.ProgramChanged
-    SELECT GETDATE(), @ChangeType, d.*
-	FROM Deleted d
+    (
+        ChangeDatetime,
+        ChangeType,
+        ProgramPK,
+        Creator,
+        CreateDate,
+        Editor,
+        EditDate,
+		IDNumber,
+        [Location],
+        ProgramEndDate,
+        ProgramName,
+        ProgramStartDate,
+        CohortFK,
+        HubFK,
+        StateFK
+    )
+    SELECT GETDATE(), 
+		@ChangeType,
+        d.ProgramPK,
+        d.Creator,
+        d.CreateDate,
+        d.Editor,
+        d.EditDate,
+		d.IDNumber,
+        d.[Location],
+        d.ProgramEndDate,
+        d.ProgramName,
+        d.ProgramStartDate,
+        d.CohortFK,
+        d.HubFK,
+        d.StateFK
+	FROM Deleted d;
 
 	--To hold any existing change rows
-	DECLARE @ExistingChangeRows TABLE (
-		ProgramPK INT,
-		MinChangeDatetime DATETIME
-	)
+    DECLARE @ExistingChangeRows TABLE
+    (
+        ProgramChangedPK INT NOT NULL,
+        ProgramPK INT NOT NULL,
+        RowNumber INT NOT NULL
+    );
 
-	--Get the existing change rows if there are more than 5
-	INSERT INTO @ExistingChangeRows
-	(
-	    ProgramPK,
-	    MinChangeDatetime
-	)
-	SELECT ac.ProgramPK, CAST(MIN(ac.ChangeDatetime) AS DATETIME)
-	FROM dbo.ProgramChanged ac
-	GROUP BY ac.ProgramPK
-	HAVING COUNT(ac.ProgramPK) > 5
+    --Get the existing change rows for affected program
+    INSERT INTO @ExistingChangeRows
+    (
+        ProgramChangedPK,
+		ProgramPK,
+        RowNumber
+    )
+    SELECT pc.ProgramChangedPK,
+		   pc.ProgramPK,
+           ROW_NUMBER() OVER (PARTITION BY pc.ProgramPK
+                              ORDER BY pc.ProgramChangedPK DESC
+                             ) AS RowNum
+    FROM dbo.ProgramChanged pc
+    WHERE EXISTS
+    (
+        SELECT d.ProgramPK FROM Deleted d WHERE d.ProgramPK = pc.ProgramPK
+    );
 
-	--Delete the excess change rows to keep the number of change rows at 5
-	DELETE ac
-	FROM dbo.ProgramChanged ac
-	INNER JOIN @ExistingChangeRows ecr ON ac.ProgramPK = ecr.ProgramPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
-	WHERE ac.ProgramPK = ecr.ProgramPK AND ac.ChangeDatetime = ecr.MinChangeDatetime
+	--Remove all but the most recent 5 change rows for each affected program
+    DELETE FROM @ExistingChangeRows
+    WHERE RowNumber <= 5;
+
+    --Delete the excess change rows to keep the number of change rows at 5
+    DELETE pc
+    FROM dbo.ProgramChanged pc
+        INNER JOIN @ExistingChangeRows ecr
+            ON pc.ProgramChangedPK = ecr.ProgramChangedPK
+    WHERE pc.ProgramChangedPK = ecr.ProgramChangedPK;
 	
 END
 GO
-ALTER TABLE [dbo].[Program] ADD CONSTRAINT [PK_Program] PRIMARY KEY CLUSTERED  ([ProgramPK]) ON [PRIMARY]
+ALTER TABLE [dbo].[Program] ADD CONSTRAINT [PK_Program] PRIMARY KEY CLUSTERED ([ProgramPK]) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[Program] ADD CONSTRAINT [FK_Program_Cohort] FOREIGN KEY ([CohortFK]) REFERENCES [dbo].[Cohort] ([CohortPK])
 GO
